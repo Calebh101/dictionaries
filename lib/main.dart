@@ -9,6 +9,8 @@ import 'package:localpkg/dialogue.dart';
 import 'package:localpkg/functions.dart';
 import 'package:styled_logger/styled_logger.dart';
 
+final Version version = Version.parse("0.0.0A");
+
 void main() {
   if (kDebugMode) Logger.enable();
   runApp(const MainApp());
