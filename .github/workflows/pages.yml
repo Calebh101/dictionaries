@@ -1,0 +1,29 @@
+name: Build and Deploy Flutter Web
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository - Checkout
+        uses: actions/checkout@v4
+      
+      - name: Flutter - Setup
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: stable
+
+      - name: Flutter - Update Dependencies
+        run: flutter pub get
+
+      - name: Flutter - Build for Web
+        run: flutter build web --release
+
+      - name: Pages - Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
