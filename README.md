@@ -1,3 +1,3 @@
-# dictionaries
+# Dictionaries
 
-A new Flutter project.
+A cool little tool to centralize your development of different "dictionaries".
