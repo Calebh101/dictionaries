@@ -3,6 +3,7 @@
 import 'dart:convert';
 
 import 'package:dictionaries/object/main.dart';
+import 'package:dictionaries/object/nodes.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:localpkg/dialogue.dart';
@@ -79,26 +80,7 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) {
     List<HomeOption> children = [
       HomeOption("New", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
-        activateEditor(jsonEncode({
-          "test1": {
-            "test2": [
-              "test3",
-              4,
-              {
-                "test5": "test6",
-              },
-              [
-                "test7",
-                8,
-                true,
-              ]
-            ],
-            "test8": {
-              "test9": 10,
-              "test11": false,
-            },
-          }
-        }));
+        activateEditor(jsonEncode(testJson));
       }),
       HomeOption("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, onActivate: () async {}),
       HomeOption("Download", description: "Download an existing dictionary.", icon: Icons.download, child: flagSet(download_loading) ? CircularProgressIndicator() : null, onActivate: () async {
@@ -163,5 +145,95 @@ class _EditorMainPageState extends State<EditorMainPage> {
 }
 
 Widget? decideEditor(String raw) {
-  return ObjectEditorPage(value: jsonDecode(raw));
+  return ObjectEditorPage(root: RootNode.fromJson(jsonDecode(raw)));
 }
+
+const Map testJson = {
+  "test1": {
+    "test2": [
+      "test3",
+      4,
+      {
+        "test5": "test6",
+        "deep1": {
+          "deep2": [
+            {
+              "deep3": {
+                "deep4": [
+                  {
+                    "deep5": [
+                      {
+                        "deep6": {
+                          "deep7": [
+                            {
+                              "deep8": {
+                                "deep9": [
+                                  {
+                                    "deep10": {
+                                      "deep11": [
+                                        {
+                                          "deep12": {
+                                            "deep13": [
+                                              {
+                                                "deep14": [
+                                                  {
+                                                    "deep15": "you are lost"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      [
+        "test7",
+        8,
+        true,
+        [
+          "level2",
+          [
+            "level3",
+            [
+              "level4",
+              [
+                "level5",
+                [
+                  "level6",
+                  ["level7", ["level8", ["level9", ["level10"]]]]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    ],
+    "test8": {
+      "test9": 10,
+      "test11": false,
+      "testDeep": {
+        "anotherLayer": {
+          "yetAnother": {
+            "finalLayer": ["almostThere", {"key": "value"}]
+          }
+        }
+      }
+    },
+  },
+  "test12": "test13",
+};

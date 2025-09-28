@@ -1,4 +1,5 @@
 import 'package:dictionaries/object/editor.dart';
+import 'package:dictionaries/object/nodes.dart';
 import 'package:dictionaries/object/preview.dart';
 import 'package:flutter/material.dart';
 
@@ -17,27 +18,27 @@ enum ObjectEditorTabType {
 }
 
 class ObjectEditorPage extends StatefulWidget {
-  final Map value;
-  const ObjectEditorPage({super.key, required this.value});
+  final RootNode root;
+  const ObjectEditorPage({super.key, required this.root});
 
   @override
   State<ObjectEditorPage> createState() => _ObjectEditorPageState();
 }
 
 class _ObjectEditorPageState extends State<ObjectEditorPage> {
-  late Map value;
+  late RootNode root;
   List<ObjectEditorTabType> tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings];
 
   @override
   void initState() {
-    value = widget.value;
+    root = widget.root;
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: tabs.length + 1,
+      length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
           bottom: PreferredSize(
@@ -73,7 +74,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
             ObjectEditorTabType type = tabs[i];
         
             return Center(
-              child: objectEditorTabTypeToWidget(type),
+              child: objectEditorTabTypeContent(type),
             );
           }),
         ]),
@@ -83,7 +84,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
 
   Widget objectEditorTabTypeToWidget(ObjectEditorTabType objectEditorTabType) {
     switch (objectEditorTabType) {
-      case ObjectEditorTabType.base: return Text("Editor");
+      case ObjectEditorTabType.base: return Icon(Icons.edit);
       case ObjectEditorTabType.json: return Text("JSON");
       case ObjectEditorTabType.yaml: return Text("YAML");
       case ObjectEditorTabType.plist: return Text("PList");
@@ -102,7 +103,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
 
   Widget objectEditorTabTypeContent(ObjectEditorTabType objectEditorTabType) {
     switch (objectEditorTabType) {
-      case ObjectEditorTabType.base: return ObjectEditor();
+      case ObjectEditorTabType.base: return ObjectEditor(root: widget.root);
       case ObjectEditorTabType.settings: return ObjectEditorSettings();
 
       default: 

@@ -12,29 +12,48 @@ enum NodeType {
   data,
 }
 
-abstract class NodeData {
-  const NodeData();
-  Uint8List toBinary();
+enum RootNodeType {
+  array,
+  map,
+}
 
-  factory NodeData.fromBinary(Uint8List bytes) {
-    throw UnimplementedError('fromBinary must be implemented by subclasses');
+String nodeTypeToString(NodeType type) {
+  switch (type) {
+    case NodeType.string: return "String";
+    case NodeType.number: return "Number";
+    case NodeType.boolean: return "Boolean";
+    case NodeType.empty: return "Null";
+    case NodeType.array: return "Array";
+    case NodeType.map: return "Dictionary";
+    case NodeType.date: return "Date";
+    case NodeType.data: return "Data";
   }
 }
 
-abstract class Node<T> extends NodeData {
-  final NodeType type;
-  final T input;
+abstract class NodeData {
   final List<NodeData> children;
+  NodeData({required this.children});
 
-  const Node({required this.type, required this.input, required this.children});
+  factory NodeData.fromBinary(Uint8List bytes) {
+    throw UnimplementedError('fromBinary must be implemented by subclasses.');
+  }
+
+  Uint8List toBinary();
+}
+
+abstract class Node<T> extends NodeData {
+  NodeType type;
+  T input;
+
+  Node({required this.type, required this.input, required super.children});
   bool get hasChildren => children.isNotEmpty;
 }
 
 class NodeKeyValuePair extends NodeData {
-  final String key;
-  final Node value;
+  String key;
+  Node value;
 
-  const NodeKeyValuePair({required this.key, required this.value});
+  NodeKeyValuePair({required this.key, required this.value}) : super(children: value.children);
 
   @override
   Uint8List toBinary() {
@@ -44,7 +63,8 @@ class NodeKeyValuePair extends NodeData {
 
 class RootNode {
   final List<NodeData> children;
-  const RootNode({required this.children});
+  final RootNodeType type;
+  RootNode({required this.children, required this.type});
 
   Uint8List toBinary() {
     List<Uint8List> chunks = children.map((x) => x.toBinary()).toList();
@@ -59,10 +79,56 @@ class RootNode {
 
     return combined;
   }
+
+  static RootNode fromJson(Object? input) {
+    Node process(Object? input) {
+      if (input is String) {
+        return StringNode(input);
+      } else if (input is num) {
+        return NumberNode(input);
+      } else if (input is bool) {
+        return BooleanNode(input);
+      } else if (input == null) {
+        return EmptyNode();
+      } else if (input is List) {
+        return ArrayNode(input.map((value) {
+          return process(value);
+        }).toList());
+      } else if (input is Map) {
+        return MapNode(input.entries.map((entry) {
+          return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value));
+        }).toList());
+      } else if (input is DateTime) {
+        return DateNode(input);
+      } else if (input is Uint8List) {
+        return DataNode(input);
+      } else if (input is Node) {
+        return input;
+      } else {
+        throw UnimplementedError();
+      }
+    }
+    
+    if (input is Map) {
+      Iterable<NodeKeyValuePair> objects = input.entries.map((entry) {
+        return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value));
+      });
+
+      return RootNode(children: objects.toList(), type: RootNodeType.map);
+    } else if (input is List) {
+      Iterable<Node> objects = input.map((value) {
+        return process(value);
+      });
+
+      return RootNode(children: objects.toList(), type: RootNodeType.array);
+    } else {
+      throw UnimplementedError();
+    }
+  }
 }
 
 class StringNode extends Node<String> {
-  const StringNode(String input) : super(type: NodeType.string, input: input, children: const []);
+  StringNode(String input) : super(type: NodeType.string, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -71,7 +137,7 @@ class StringNode extends Node<String> {
 }
 
 class NumberNode extends Node<num> {
-  const NumberNode(num input) : super(type: NodeType.number, input: input, children: const []);
+  NumberNode(num input) : super(type: NodeType.number, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -92,7 +158,7 @@ class NumberNode extends Node<num> {
 }
 
 class BooleanNode extends Node<bool> {
-  const BooleanNode(bool input) : super(type: NodeType.boolean, input: input, children: const []);
+  BooleanNode(bool input) : super(type: NodeType.boolean, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -101,7 +167,7 @@ class BooleanNode extends Node<bool> {
 }
 
 class EmptyNode extends Node<void> {
-  const EmptyNode() : super(type: NodeType.empty, input: null, children: const []);
+  EmptyNode() : super(type: NodeType.empty, input: null, children: []);
 
   @override
   Uint8List toBinary() {
@@ -110,7 +176,7 @@ class EmptyNode extends Node<void> {
 }
 
 class ArrayNode extends Node<void> {
-  const ArrayNode(List<Node> input) : super(type: NodeType.array, input: null, children: input);
+  ArrayNode(List<Node> input) : super(type: NodeType.array, input: null, children: input);
 
   @override
   Uint8List toBinary() {
@@ -135,7 +201,7 @@ class ArrayNode extends Node<void> {
 }
 
 class MapNode extends Node<void> {
-  const MapNode(List<NodeKeyValuePair> input) : super(type: NodeType.map, input: null, children: input);
+  MapNode(List<NodeKeyValuePair> input) : super(type: NodeType.map, input: null, children: input);
 
   @override
   Uint8List toBinary() {
@@ -160,7 +226,7 @@ class MapNode extends Node<void> {
 }
 
 class DateNode extends Node<DateTime> {
-  const DateNode(DateTime input) : super(type: NodeType.date, input: input, children: const []);
+  DateNode(DateTime input) : super(type: NodeType.date, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -172,7 +238,7 @@ class DateNode extends Node<DateTime> {
 }
 
 class DataNode extends Node<Uint8List> {
-  const DataNode(Uint8List input) : super(type: NodeType.data, input: input, children: const []);
+  DataNode(Uint8List input) : super(type: NodeType.data, input: input, children: []);
 
   @override
   Uint8List toBinary() {
