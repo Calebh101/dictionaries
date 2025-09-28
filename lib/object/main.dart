@@ -1,3 +1,5 @@
+import 'package:dictionaries/object/editor.dart';
+import 'package:dictionaries/object/preview.dart';
 import 'package:flutter/material.dart';
 
 enum ObjectType {
@@ -108,35 +110,6 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
         if (type == null) throw Exception("Invalid editor type: $objectEditorTabType");
         return ObjectEditorPreview(type: type);
     }
-  }
-}
-
-class ObjectEditor extends StatefulWidget {
-  const ObjectEditor({super.key});
-
-  @override
-  State<ObjectEditor> createState() => _ObjectEditorState();
-}
-
-class _ObjectEditorState extends State<ObjectEditor> {
-  @override
-  Widget build(BuildContext context) {
-    return const Placeholder();
-  }
-}
-
-class ObjectEditorPreview extends StatefulWidget {
-  final ObjectType type;
-  const ObjectEditorPreview({super.key, required this.type});
-
-  @override
-  State<ObjectEditorPreview> createState() => _ObjectEditorPreviewState();
-}
-
-class _ObjectEditorPreviewState extends State<ObjectEditorPreview> {
-  @override
-  Widget build(BuildContext context) {
-    return const Placeholder();
   }
 }
 
