@@ -1,0 +1,9 @@
+*.dart linguist-language=Dart
+
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.exe binary
+*.so binary
+
+* text=auto

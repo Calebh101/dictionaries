@@ -24,7 +24,7 @@ jobs:
           channel: stable
 
       - name: Flutter - Build for Web
-        run: flutter build web --release
+        run: flutter build web --release --no-wasm-dry-run
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
