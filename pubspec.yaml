@@ -10,13 +10,13 @@ dependencies:
   flutter:
     sdk: flutter
 
-  flutter_fancy_tree_view: ^1.6.0
   localpkg:
     git:
       url: https://github.com/Calebh101/localpkg-flutter-2.git
       ref: main
 
   styled_logger: ^1.0.2
+  two_dimensional_scrollables: ^0.3.7
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,6 @@
 import 'package:dictionaries/object/nodes.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
+import 'package:two_dimensional_scrollables/two_dimensional_scrollables.dart';
 
 class ObjectEditor extends StatefulWidget {
   final RootNode root;
@@ -11,12 +11,10 @@ class ObjectEditor extends StatefulWidget {
 }
 
 class _ObjectEditorState extends State<ObjectEditor> {
-  late final TreeController<NodeData> controller;
   ScrollController scrollController1 = ScrollController();
 
   @override
   void initState() {
-    controller = TreeController<NodeData>(roots: widget.root.children, childrenProvider: (node) => node.children);
     super.initState();
   }
 
@@ -24,7 +22,15 @@ class _ObjectEditorState extends State<ObjectEditor> {
   Widget build(BuildContext context) {
     bool small = MediaQuery.of(context).size.width < 300;
 
-    return AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
+    return TreeView<NodeData>(tree: widget.root.children.map((child) {
+      TreeViewNode<NodeData> process(NodeData child, [int level = 0]) {
+        return TreeViewNode<NodeData>(child, children: child.children.map((child) => process(child, level + 1)).toList());
+      }
+
+      return process(child);
+    }).toList());
+
+    /*return AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
       late Node node;
       NodeData data = entry.node;
       String title = "Unknown";
@@ -105,7 +111,7 @@ class _ObjectEditorState extends State<ObjectEditor> {
           ),
         ),
       );
-    });
+    });*/
   }
 }
 
