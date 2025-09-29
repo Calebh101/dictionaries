@@ -23,7 +23,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
   @override
   void initState() {
-    controller = TreeController<NodeData>(roots: widget.root.children, childrenProvider: (node) => node.children);
+    controller = TreeController<NodeData>(roots: [RootTreeNode(children: widget.root.children, type: rootNodeTypeToNodeType(widget.root.type))], childrenProvider: (node) => node.children);
     super.initState();
   }
 
@@ -63,6 +63,75 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
         )),
       ],
       child: AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
+        if (entry.node.isRoot) {
+          RootTreeNode node = entry.node as RootTreeNode;
+
+          return InkWell(
+            child: Padding(
+              padding: const EdgeInsets.all(0),
+              child: TreeIndentation(
+                child: Row(
+                  children: [
+                    ExpandIcon(
+                      size: 24,
+                      isExpanded: entry.isExpanded,
+                      onPressed: (value) {},
+                    ),
+                    SizedBox(
+                      width: 40,
+                      height: 32,
+                    ),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          double maxWidth = MediaQuery.of(context).size.width;
+                          double width2 = 100;
+                          double width3 = maxWidth * 0.3;
+                          double width1 = constraints.maxWidth - width2 - width3;
+        
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                width: width1,
+                                child: SelectableText("Root", textAlign: TextAlign.left),
+                              ),
+                              SizedBox(
+                                width: width3,
+                                child: Text("${node.children.length} Children"),
+                              ),
+                              SizedBox(
+                                width: width2,
+                                child: DropdownButton<RootNodeType>(items: RootNodeType.values.map((type) {
+                                  return DropdownMenuItem<RootNodeType>(
+                                    alignment: AlignmentGeometry.center,
+                                    value: type,
+                                    child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
+                                  );
+                                }).toList(), onChanged: (value) {
+                                  if (value == null) return;
+                                  // TODO
+                                  refresh(tree: true);
+                                }, value: node.root.type),
+                              ),
+                            ],
+                          );
+                        }
+                      ),
+                    ),
+                  ],
+                ),
+                guide: IndentGuide.connectingLines(
+                  indent: 24,
+                  thickness: 1,
+                  color: Colors.grey,
+                ),
+                entry: entry,
+              ),
+            ),
+          );
+        }
+
         late Node node;
         NodeData data = entry.node;
         String title = "Unknown";
@@ -111,7 +180,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                             ),
                             SizedBox(
                               width: width3,
-                              child: node.input != null ? SelectableText(node.input.toString(), textAlign: TextAlign.center) : SizedBox.shrink(),
+                              child: node.input != null ? SelectableText(node.hasChildren ? "${node.children.length} Children" : node.input.toString(), textAlign: TextAlign.center) : SizedBox.shrink(),
                             ),
                             SizedBox(
                               width: width2,

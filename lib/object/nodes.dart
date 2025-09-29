@@ -69,8 +69,9 @@ abstract class NodeData {
   }
 
   Node get node;
-  Uint8List toBinary();
+  bool get isRoot => false;
 
+  Uint8List toBinary();
   Object? toJson();
 }
 
@@ -84,6 +85,35 @@ abstract class Node<T> extends NodeData {
 
   @override
   Node get node => this;
+}
+
+class RootTreeNode extends Node<void> {
+  final RootNode root;
+  RootTreeNode({required this.root, required super.children, required super.type}) : super(input: null);
+
+  @override
+  void get defaultValue => throw UnimplementedError();
+
+  @override
+  bool get isRoot => true;
+
+  @override
+  Uint8List toBinary() {
+    List<Uint8List> chunks = children.map((x) => x.toBinary()).toList();
+    int totalLength = chunks.fold(0, (sum, chunk) => sum + chunk.length);
+    Uint8List combined = Uint8List(totalLength);
+    int offset = 0;
+
+    for (Uint8List chunk in chunks) {
+      combined.setRange(offset, offset + chunk.length, chunk);
+      offset += chunk.length;
+    }
+
+    return combined;
+  }
+  
+  @override
+  Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
 }
 
 class NodeKeyValuePair extends NodeData {
