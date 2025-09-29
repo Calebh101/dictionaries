@@ -30,15 +30,44 @@ String nodeTypeToString(NodeType type) {
   }
 }
 
+NodeType rootNodeTypeToNodeType(RootNodeType type) {
+  switch (type) {
+    case RootNodeType.map: return NodeType.map;
+    case RootNodeType.array: return NodeType.array;
+  }
+}
+
+Object? _toSpecified(NodeType type, List<NodeData> children, Object? Function(NodeData value) toCallback) {
+  if (type == NodeType.map) {
+    Map<String, dynamic> output = {};
+
+    for (NodeData child in children) {
+      if (child is! NodeKeyValuePair) continue;
+      output[child.key] = toCallback.call(child.value);
+    }
+
+    return output;
+  } else if (type == NodeType.array) {
+    return children.map((x) => toCallback.call(x)).toList();
+  } else {
+    return null;
+  }
+}
+
 abstract class NodeData {
-  final List<NodeData> children;
+  List<NodeData> children;
   NodeData({required this.children});
 
   factory NodeData.fromBinary(Uint8List bytes) {
     throw UnimplementedError('fromBinary must be implemented by subclasses.');
   }
 
+  Node get node;
   Uint8List toBinary();
+
+  Object? toJson();
+  Object? toYaml() => toJson();
+  Object? toPlist() => toJson();
 }
 
 abstract class Node<T> extends NodeData {
@@ -47,6 +76,10 @@ abstract class Node<T> extends NodeData {
 
   Node({required this.type, required this.input, required super.children});
   bool get hasChildren => children.isNotEmpty;
+  T get defaultValue;
+
+  @override
+  Node get node => this;
 }
 
 class NodeKeyValuePair extends NodeData {
@@ -56,14 +89,22 @@ class NodeKeyValuePair extends NodeData {
   NodeKeyValuePair({required this.key, required this.value}) : super(children: value.children);
 
   @override
+  Node get node => value;
+
+  @override
   Uint8List toBinary() {
     return Uint8List.fromList([...utf8.encode(key), 0x00, ...value.toBinary()]);
+  }
+
+  @override
+  Object? toJson() {
+    return {key: value.toJson()};
   }
 }
 
 class RootNode {
-  final List<NodeData> children;
-  final RootNodeType type;
+  List<NodeData> children;
+  RootNodeType type;
   RootNode({required this.children, required this.type});
 
   Uint8List toBinary() {
@@ -79,6 +120,10 @@ class RootNode {
 
     return combined;
   }
+
+  Object? toJson() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toJson());
+  Object? toYaml() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toYaml());
+  Object? toPlist() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toPlist());
 
   static RootNode fromJson(Object? input) {
     Node process(Object? input) {
@@ -134,6 +179,14 @@ class StringNode extends Node<String> {
   Uint8List toBinary() {
     return utf8.encode(input);
   }
+
+  @override
+  Object? toJson() {
+    return input;
+  }
+
+  @override
+  String get defaultValue => "";
 }
 
 class NumberNode extends Node<num> {
@@ -155,6 +208,14 @@ class NumberNode extends Node<num> {
     output.setRange(1, data.lengthInBytes + 1, data.buffer.asUint8List());
     return output;
   }
+
+  @override
+  Object? toJson() {
+    return input;
+  }
+
+  @override
+  num get defaultValue => 0;
 }
 
 class BooleanNode extends Node<bool> {
@@ -164,6 +225,14 @@ class BooleanNode extends Node<bool> {
   Uint8List toBinary() {
     return Uint8List.fromList([input ? 1 : 0]);
   }
+
+  @override
+  Object? toJson() {
+    return input;
+  }
+
+  @override
+  bool get defaultValue => false;
 }
 
 class EmptyNode extends Node<void> {
@@ -173,6 +242,14 @@ class EmptyNode extends Node<void> {
   Uint8List toBinary() {
     return Uint8List(0);
   }
+
+  @override
+  Object? toJson() {
+    return null;
+  }
+
+  @override
+  void get defaultValue {}
 }
 
 class ArrayNode extends Node<void> {
@@ -198,6 +275,16 @@ class ArrayNode extends Node<void> {
 
     return data;
   }
+
+  @override
+  Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
+  @override
+  Object? toYaml() => _toSpecified(type, children, (x) => x.toYaml());
+  @override
+  Object? toPlist() => _toSpecified(type, children, (x) => x.toPlist());
+
+  @override
+  void get defaultValue {}
 }
 
 class MapNode extends Node<void> {
@@ -223,6 +310,16 @@ class MapNode extends Node<void> {
 
     return data;
   }
+
+  @override
+  Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
+  @override
+  Object? toYaml() => _toSpecified(type, children, (x) => x.toYaml());
+  @override
+  Object? toPlist() => _toSpecified(type, children, (x) => x.toPlist());
+
+  @override
+  void get defaultValue {}
 }
 
 class DateNode extends Node<DateTime> {
@@ -235,6 +332,14 @@ class DateNode extends Node<DateTime> {
     data.setInt64(0, ms);
     return data.buffer.asUint8List();
   }
+
+  @override
+  Object? toJson() {
+    return input.toIso8601String();
+  }
+
+  @override
+  DateTime get defaultValue => DateTime.now();
 }
 
 class DataNode extends Node<Uint8List> {
@@ -244,4 +349,17 @@ class DataNode extends Node<Uint8List> {
   Uint8List toBinary() {
     return input;
   }
+
+  @override
+  Object? toJson() {
+    return base64Encode(input);
+  }
+
+  @override
+  Object? toPlist() {
+    return input;
+  }
+
+  @override
+  Uint8List get defaultValue => Uint8List(0);
 }

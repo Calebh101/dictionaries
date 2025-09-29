@@ -41,6 +41,8 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
       length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
+          title: Text(["Dictionaries"].join(" - ")),
+          centerTitle: true,
           bottom: PreferredSize(
             preferredSize: Size.fromHeight(50),
             child: Row(
@@ -74,7 +76,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
             ObjectEditorTabType type = tabs[i];
         
             return Center(
-              child: objectEditorTabTypeContent(type),
+              child: objectEditorTabTypeContent(context, type),
             );
           }),
         ]),
@@ -101,9 +103,9 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
     }
   }
 
-  Widget objectEditorTabTypeContent(ObjectEditorTabType objectEditorTabType) {
+  Widget objectEditorTabTypeContent(BuildContext context, ObjectEditorTabType objectEditorTabType) {
     switch (objectEditorTabType) {
-      case ObjectEditorTabType.base: return ObjectEditor(root: widget.root);
+      case ObjectEditorTabType.base: return ObjectEditorDesktop(root: widget.root);
       case ObjectEditorTabType.settings: return ObjectEditorSettings();
 
       default: 

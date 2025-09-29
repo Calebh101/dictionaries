@@ -67,7 +67,7 @@ class _HomeState extends State<Home> {
   bool activateEditor(String raw) {
     Widget? widget = decideEditor(raw);
     if (widget == null) return SnackBarManager.show(context, "Invalid file type.").thenReturn(false);
-    SimpleNavigator.navigate(context: context, page: EditorMainPage(child: widget));
+    SimpleNavigator.navigate(context: context, page: EditorMainPage(child: widget), mode: NavigatorMode.pushReplacement);
     return true;
   }
 
@@ -177,7 +177,8 @@ const Map testJson = {
                                               {
                                                 "deep14": [
                                                   {
-                                                    "deep15": "you are lost"
+                                                    "deep15": "you are lost",
+                                                    "deep16": "you will never find a way out",
                                                   }
                                                 ]
                                               }
