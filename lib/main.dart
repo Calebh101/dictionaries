@@ -1,6 +1,6 @@
 // ignore_for_file: constant_identifier_names
 
-import 'dart:convert';
+import 'dart:io';
 
 import 'package:dictionaries/object/main.dart';
 import 'package:dictionaries/object/nodes.dart';
@@ -80,7 +80,7 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) {
     List<HomeOption> children = [
       HomeOption("New", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
-        activateEditor(jsonEncode(testJson));
+        activateEditor(File("/home/caleb/Downloads/config2a.plist").readAsStringSync());
       }),
       HomeOption("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, onActivate: () async {}),
       HomeOption("Download", description: "Download an existing dictionary.", icon: Icons.download, child: flagSet(download_loading) ? CircularProgressIndicator() : null, onActivate: () async {
@@ -145,7 +145,7 @@ class _EditorMainPageState extends State<EditorMainPage> {
 }
 
 Widget? decideEditor(String raw) {
-  return ObjectEditorPage(root: RootNode.fromJson(jsonDecode(raw)));
+  return ObjectEditorPage(root: RootNode.tryParse(raw)!);
 }
 
 const Map testJson = {

@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:json2yaml/json2yaml.dart';
+import 'package:plist_parser/plist_parser.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:xml/xml.dart';
+import 'package:yaml/yaml.dart';
 
 enum NodeType {
   string,
@@ -70,7 +72,6 @@ abstract class NodeData {
   Uint8List toBinary();
 
   Object? toJson();
-  Object? toYaml() => toJson();
 }
 
 abstract class Node<T> extends NodeData {
@@ -108,7 +109,9 @@ class NodeKeyValuePair extends NodeData {
 class RootNode {
   List<NodeData> children;
   RootNodeType type;
+
   RootNode({required this.children, required this.type});
+  RootNode.clean({required this.type}) : children = const [];
 
   Uint8List toBinary() {
     List<Uint8List> chunks = children.map((x) => x.toBinary()).toList();
@@ -125,21 +128,24 @@ class RootNode {
   }
 
   Object? toJson() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toJson());
-  Object? toYaml() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toYaml());
-  Object? toPlist() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toPlist());
+  XmlDocument toPlist({bool showNull = false}) => _toPlist(toJson());
 
   String toJsonString() {
     return jsonEncode(toJson());
   }
 
   String toYamlString() {
-    return json2yaml(toYaml() as Map<String, dynamic>);
+    return json2yaml(toJson() as Map<String, dynamic>);
   }
 
-  static String toPlistString(Object input, {bool showNull = false}) {
+  String toPlistString({bool showNull = false, bool pretty = true, String indent = '  '}) {
+    return _toPlist(toJson(), showNull: showNull).toXmlString(pretty: pretty, indent: indent);
+  }
+
+  static XmlDocument _toPlist(Object? input, {bool showNull = false}) {
     XmlNode? process(Object? value) {
       if (value == null) {
-        return null;
+        return showNull ? XmlElement(XmlName("null")) : null;
       } else if (value is String) {
         return XmlElement(XmlName("string"), [], [XmlText(value)]);
       } else if (value is int) {
@@ -153,7 +159,7 @@ class RootNode {
       } else if (value is Uint8List) {
         return XmlElement(XmlName("data"), [], [XmlText(base64Encode(value))]);
       } else if (value is List) {
-        return XmlElement(XmlName("array"), [], value.map((x) => process(input)).whereType<XmlNode>());
+        return XmlElement(XmlName("array"), [], value.map((x) => process(x)).whereType<XmlNode>());
       } else if (value is Map) {
         List<XmlNode> children = [];
 
@@ -178,13 +184,14 @@ class RootNode {
 
     builder.element('plist', nest: () {
       builder.attribute('version', '1.0');
-      builder.node(_toPlist(input));
     });
 
-    return builder.buildDocument().toXmlString(pretty: true, indent: '  ');
+    XmlDocument document = builder.buildDocument();
+    document.rootElement.children.add(process(input)!);
+    return document;
   }
 
-  static RootNode fromJson(Object? input) {
+  static RootNode fromObject(Object? input) {
     Node process(Object? input) {
       if (input is String) {
         return StringNode(input);
@@ -227,6 +234,38 @@ class RootNode {
       return RootNode(children: objects.toList(), type: RootNodeType.array);
     } else {
       throw UnimplementedError();
+    }
+  }
+
+  static RootNode fromJson(String raw) {
+    return RootNode.fromObject(jsonDecode(raw));
+  }
+
+  static RootNode fromPlist(String input) {
+    return fromObject(PlistParser().parse(input));
+  }
+
+  static RootNode fromYaml(String input) {
+    return loadYaml(input);
+  }
+
+  static RootNode? tryParse(String raw) {
+    try {
+      Logger.print("Trying JSON...");
+      return RootNode.fromJson(raw);
+    } catch (a) {
+      try {
+        Logger.print("Trying YAML...");
+        return RootNode.fromYaml(raw);
+      } catch (b) {
+        try {
+          Logger.print("Trying PList...");
+          return RootNode.fromPlist(raw);
+        } catch (c) {
+          Logger.warn("Unable to parse input: ${[a, b, c].join(", ")}");
+          return null;
+        }
+      }
     }
   }
 }
@@ -337,8 +376,6 @@ class ArrayNode extends Node<void> {
 
   @override
   Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
-  @override
-  Object? toYaml() => _toSpecified(type, children, (x) => x.toYaml());
 
   @override
   void get defaultValue {}
@@ -370,8 +407,6 @@ class MapNode extends Node<void> {
 
   @override
   Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
-  @override
-  Object? toYaml() => _toSpecified(type, children, (x) => x.toYaml());
 
   @override
   void get defaultValue {}

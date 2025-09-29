@@ -7,6 +7,7 @@ import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:json2yaml/json2yaml.dart';
 import 'package:localpkg/dialogue.dart';
 import 'package:menu_bar/menu_bar.dart';
+import 'package:xml/xml.dart';
 
 class ObjectEditorDesktop extends StatefulWidget {
   final RootNode root;
@@ -45,8 +46,15 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
               SnackBarManager.show(context, "Copied ${text.codeUnits.length} bytes!");
             }),
             MenuButton(text: Text("Copy as YAML"), onTap: () {
-              Object? data = widget.root.toYaml();
+              Object? data = widget.root.toJson();
               String text = json2yaml(data as Map<String, dynamic>);
+
+              Clipboard.setData(ClipboardData(text: text));
+              SnackBarManager.show(context, "Copied ${text.codeUnits.length} bytes!");
+            }),
+            MenuButton(text: Text("Copy as PList"), onTap: () {
+              XmlDocument data = widget.root.toPlist();
+              String text = widget.root.toPlistString();
 
               Clipboard.setData(ClipboardData(text: text));
               SnackBarManager.show(context, "Copied ${text.codeUnits.length} bytes!");
