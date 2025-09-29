@@ -23,7 +23,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
   @override
   void initState() {
-    controller = TreeController<NodeData>(roots: [RootTreeNode(children: widget.root.children, type: rootNodeTypeToNodeType(widget.root.type))], childrenProvider: (node) => node.children);
+    controller = TreeController<NodeData>(roots: [RootTreeNode(root: widget.root, children: widget.root.children, type: rootNodeTypeToNodeType(widget.root.type))], childrenProvider: (node) => node.children);
     super.initState();
   }
 
