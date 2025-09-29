@@ -115,9 +115,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                 );
                               }).toList(), onChanged: (value) {
                                 if (value == null) return;
-                                node.type = value;
-                                node.input = node.defaultValue;
-                                node.children.clear();
+                                // TODO
                                 refresh(tree: true);
                               }, value: node.type),
                             ),

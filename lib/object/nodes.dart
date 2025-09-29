@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:json2yaml/json2yaml.dart';
+import 'package:styled_logger/styled_logger.dart';
+import 'package:xml/xml.dart';
+
 enum NodeType {
   string,
   number, // int or double
@@ -67,7 +71,6 @@ abstract class NodeData {
 
   Object? toJson();
   Object? toYaml() => toJson();
-  Object? toPlist() => toJson();
 }
 
 abstract class Node<T> extends NodeData {
@@ -124,6 +127,62 @@ class RootNode {
   Object? toJson() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toJson());
   Object? toYaml() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toYaml());
   Object? toPlist() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toPlist());
+
+  String toJsonString() {
+    return jsonEncode(toJson());
+  }
+
+  String toYamlString() {
+    return json2yaml(toYaml() as Map<String, dynamic>);
+  }
+
+  static String toPlistString(Object input, {bool showNull = false}) {
+    XmlNode? process(Object? value) {
+      if (value == null) {
+        return null;
+      } else if (value is String) {
+        return XmlElement(XmlName("string"), [], [XmlText(value)]);
+      } else if (value is int) {
+        return XmlElement(XmlName("integer"), [], [XmlText(value.toString())]);
+      } else if (value is double) {
+        return XmlElement(XmlName("real"), [], [XmlText(value.toString())]);
+      } else if (value is bool) {
+        return XmlElement(XmlName(value ? "true" : "false"));
+      } else if (value is DateTime) {
+        return XmlElement(XmlName("date"), [], [XmlText(value.toUtc().toIso8601String())]);
+      } else if (value is Uint8List) {
+        return XmlElement(XmlName("data"), [], [XmlText(base64Encode(value))]);
+      } else if (value is List) {
+        return XmlElement(XmlName("array"), [], value.map((x) => process(input)).whereType<XmlNode>());
+      } else if (value is Map) {
+        List<XmlNode> children = [];
+
+        value.forEach((key, value) {
+          XmlNode? node = process(value);
+
+          if (node != null) {
+            children.add(XmlElement(XmlName("key"), [], [XmlText(key)]));
+            children.add(node);
+          }
+        });
+
+        return XmlElement(XmlName("dict"), [], children);
+      } else {
+        Logger.warn("Invalid plist type: ${value.runtimeType}");
+        return null;
+      }
+    }
+
+    XmlBuilder builder = XmlBuilder();
+    builder.processing('xml', 'version="1.0" encoding="UTF-8"');
+
+    builder.element('plist', nest: () {
+      builder.attribute('version', '1.0');
+      builder.node(_toPlist(input));
+    });
+
+    return builder.buildDocument().toXmlString(pretty: true, indent: '  ');
+  }
 
   static RootNode fromJson(Object? input) {
     Node process(Object? input) {
@@ -280,8 +339,6 @@ class ArrayNode extends Node<void> {
   Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
   @override
   Object? toYaml() => _toSpecified(type, children, (x) => x.toYaml());
-  @override
-  Object? toPlist() => _toSpecified(type, children, (x) => x.toPlist());
 
   @override
   void get defaultValue {}
@@ -315,8 +372,6 @@ class MapNode extends Node<void> {
   Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
   @override
   Object? toYaml() => _toSpecified(type, children, (x) => x.toYaml());
-  @override
-  Object? toPlist() => _toSpecified(type, children, (x) => x.toPlist());
 
   @override
   void get defaultValue {}
@@ -353,11 +408,6 @@ class DataNode extends Node<Uint8List> {
   @override
   Object? toJson() {
     return base64Encode(input);
-  }
-
-  @override
-  Object? toPlist() {
-    return input;
   }
 
   @override
