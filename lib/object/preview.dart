@@ -2,9 +2,10 @@ import 'package:dictionaries/object/main.dart';
 import 'package:dictionaries/object/nodes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_highlight/flutter_highlight.dart';
-import 'package:flutter_highlight/themes/atom-one-dark.dart';
+import 'package:dictionaries/lib/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
+import 'package:flutter_highlight/themes/gruvbox-dark.dart';
+import 'package:localpkg/dialogue.dart';
 
 class ObjectEditorPreview extends StatefulWidget {
   final DataType type;
@@ -39,14 +40,19 @@ class _ObjectEditorPreviewState extends State<ObjectEditorPreview> {
           notificationPredicate: (notif) => notif.metrics.axis == Axis.horizontal,
           child: Stack(
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(onPressed: () {
-                    if (text == null) return;
-                    Clipboard.setData(ClipboardData(text: text));
-                  }, icon: Icon(Icons.copy))
-                ],
+              Positioned(
+                top: 0,
+                right: 16,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(onPressed: () {
+                      if (text == null) return;
+                      Clipboard.setData(ClipboardData(text: text));
+                      SnackBarManager.show(context, "Copied ${text.split("\n").length} lines!");
+                    }, icon: Icon(Icons.copy))
+                  ],
+                ),
               ),
               text != null ? SingleChildScrollView(
                 scrollDirection: Axis.vertical,
@@ -57,12 +63,8 @@ class _ObjectEditorPreviewState extends State<ObjectEditorPreview> {
                   child: HighlightView(
                     text,
                     language: dataTypeToLanguage(widget.type),
-                    theme: Theme.of(context).brightness == Brightness.dark ? atomOneDarkTheme : atomOneLightTheme,
+                    theme: Theme.of(context).brightness == Brightness.dark ? gruvboxDarkTheme : atomOneLightTheme,
                     padding: const EdgeInsets.all(12),
-                    textStyle: const TextStyle(
-                      fontFamily: 'Courier New',
-                      fontSize: 16,
-                    ),
                   ),
                 ),
               ) : Text("No preview available."),

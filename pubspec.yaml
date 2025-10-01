@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
 
   flutter_fancy_tree_view: ^1.6.0
+  flutter_highlight: ^0.7.0
+  highlight: ^0.7.0
   json2yaml: ^3.0.1
   localpkg:
     git:

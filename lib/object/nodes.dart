@@ -78,8 +78,9 @@ abstract class NodeData {
 abstract class Node<T> extends NodeData {
   NodeType type;
   T input;
+  int index;
 
-  Node({required this.type, required this.input, required super.children});
+  Node({required this.type, required this.input, required super.children, required this.index});
   bool get hasChildren => children.isNotEmpty;
   T get defaultValue;
 
@@ -89,7 +90,7 @@ abstract class Node<T> extends NodeData {
 
 class RootTreeNode extends Node<void> {
   final RootNode root;
-  RootTreeNode({required this.root, required super.children, required super.type}) : super(input: null);
+  RootTreeNode({required this.root, required super.children, required super.type}) : super(input: null, index: 0);
 
   @override
   void get defaultValue => throw UnimplementedError();
@@ -161,7 +162,8 @@ class RootNode {
   XmlDocument toPlist({bool showNull = false}) => _toPlist(toJson());
 
   String toJsonString() {
-    return jsonEncode(toJson());
+    JsonEncoder encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(toJson());
   }
 
   String toYamlString() {
@@ -222,27 +224,28 @@ class RootNode {
   }
 
   static RootNode fromObject(Object? input) {
-    Node process(Object? input) {
+    Node process(Object? input, [int index = -1]) {
       if (input is String) {
-        return StringNode(input);
+        return StringNode(input, index: index);
       } else if (input is num) {
-        return NumberNode(input);
+        return NumberNode(input, index: index);
       } else if (input is bool) {
-        return BooleanNode(input);
+        return BooleanNode(input, index: index);
       } else if (input == null) {
-        return EmptyNode();
+        return EmptyNode(index: index);
       } else if (input is List) {
         return ArrayNode(input.map((value) {
-          return process(value);
-        }).toList());
+          index++;
+          return process(value, index);
+        }).toList(), index: index);
       } else if (input is Map) {
         return MapNode(input.entries.map((entry) {
           return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value));
-        }).toList());
+        }).toList(), index: index);
       } else if (input is DateTime) {
-        return DateNode(input);
+        return DateNode(input, index: index);
       } else if (input is Uint8List) {
-        return DataNode(input);
+        return DataNode(input, index: index);
       } else if (input is Node) {
         return input;
       } else {
@@ -251,14 +254,20 @@ class RootNode {
     }
     
     if (input is Map) {
+      int index = -1;
+
       Iterable<NodeKeyValuePair> objects = input.entries.map((entry) {
-        return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value));
+        index++;
+        return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value, index));
       });
 
       return RootNode(children: objects.toList(), type: RootNodeType.map);
     } else if (input is List) {
+      int index = -1;
+
       Iterable<Node> objects = input.map((value) {
-        return process(value);
+        index++;
+        return process(value, index);
       });
 
       return RootNode(children: objects.toList(), type: RootNodeType.array);
@@ -301,7 +310,7 @@ class RootNode {
 }
 
 class StringNode extends Node<String> {
-  StringNode(String input) : super(type: NodeType.string, input: input, children: []);
+  StringNode(String input, {super.index = 0}) : super(type: NodeType.string, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -318,7 +327,7 @@ class StringNode extends Node<String> {
 }
 
 class NumberNode extends Node<num> {
-  NumberNode(num input) : super(type: NodeType.number, input: input, children: []);
+  NumberNode(num input, {super.index = 0}) : super(type: NodeType.number, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -347,7 +356,7 @@ class NumberNode extends Node<num> {
 }
 
 class BooleanNode extends Node<bool> {
-  BooleanNode(bool input) : super(type: NodeType.boolean, input: input, children: []);
+  BooleanNode(bool input, {super.index = 0}) : super(type: NodeType.boolean, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -364,7 +373,7 @@ class BooleanNode extends Node<bool> {
 }
 
 class EmptyNode extends Node<void> {
-  EmptyNode() : super(type: NodeType.empty, input: null, children: []);
+  EmptyNode({super.index = 0}) : super(type: NodeType.empty, input: null, children: []);
 
   @override
   Uint8List toBinary() {
@@ -381,7 +390,7 @@ class EmptyNode extends Node<void> {
 }
 
 class ArrayNode extends Node<void> {
-  ArrayNode(List<Node> input) : super(type: NodeType.array, input: null, children: input);
+  ArrayNode(List<Node> input, {super.index = 0}) : super(type: NodeType.array, input: null, children: input);
 
   @override
   Uint8List toBinary() {
@@ -412,7 +421,7 @@ class ArrayNode extends Node<void> {
 }
 
 class MapNode extends Node<void> {
-  MapNode(List<NodeKeyValuePair> input) : super(type: NodeType.map, input: null, children: input);
+  MapNode(List<NodeKeyValuePair> input, {super.index = 0}) : super(type: NodeType.map, input: null, children: input);
 
   @override
   Uint8List toBinary() {
@@ -443,7 +452,7 @@ class MapNode extends Node<void> {
 }
 
 class DateNode extends Node<DateTime> {
-  DateNode(DateTime input) : super(type: NodeType.date, input: input, children: []);
+  DateNode(DateTime input, {super.index = 0}) : super(type: NodeType.date, input: input, children: []);
 
   @override
   Uint8List toBinary() {
@@ -463,7 +472,7 @@ class DateNode extends Node<DateTime> {
 }
 
 class DataNode extends Node<Uint8List> {
-  DataNode(Uint8List input) : super(type: NodeType.data, input: input, children: []);
+  DataNode(Uint8List input, {super.index = 0}) : super(type: NodeType.data, input: input, children: []);
 
   @override
   Uint8List toBinary() {

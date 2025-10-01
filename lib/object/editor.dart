@@ -75,7 +75,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                     ExpandIcon(
                       size: 24,
                       isExpanded: entry.isExpanded,
-                      onPressed: (value) {},
+                      onPressed: (value) => controller.toggleExpansion(node),
                     ),
                     SizedBox(
                       width: 40,
@@ -138,7 +138,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
       
         if (data is Node) {
           node = data;
-          title = "";
+          title = node.index.toString();
         }
       
         if (data is NodeKeyValuePair) {

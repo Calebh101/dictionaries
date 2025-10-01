@@ -3,7 +3,7 @@ import 'package:dictionaries/object/nodes.dart';
 import 'package:dictionaries/object/preview.dart';
 import 'package:flutter/material.dart';
 
-enum ObjectType {
+enum DataType {
   json,
   yaml,
   plist,
@@ -15,6 +15,38 @@ enum ObjectEditorTabType {
   yaml,
   plist,
   settings,
+}
+
+String dataTypeToLanguage(DataType input) {
+  switch (input) {
+    case DataType.json: return "json";
+    case DataType.yaml: return "yaml";
+    case DataType.plist: return "xml";
+  }
+}
+
+String dataTypeToPrettyString(DataType input) {
+  switch (input) {
+    case DataType.json: return "JSON";
+    case DataType.yaml: return "YAML";
+    case DataType.plist: return "PList";
+  }
+}
+
+ObjectEditorTabType dataTypeToObjectEditorTabType(DataType input) {
+  switch (input) {
+    case DataType.json: return ObjectEditorTabType.json;
+    case DataType.yaml: return ObjectEditorTabType.yaml;
+    case DataType.plist: return ObjectEditorTabType.plist;
+  }
+}
+
+String? compileByType(DataType type, RootNode root) {
+  switch (type) {
+    case DataType.json: return root.toJsonString();
+    case DataType.yaml: return root.toYamlString();
+    case DataType.plist: return root.toPlistString();
+  }
 }
 
 class ObjectEditorPage extends StatefulWidget {
@@ -65,18 +97,34 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
                 ),
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: IconButton(onPressed: () {}, icon: Icon(Icons.add)),
+                  child: PopupMenuButton<Object>(icon: Icon(Icons.add), itemBuilder: (context) {
+                    return [
+                      ...List.generate(DataType.values.length, (i) {
+                        DataType type = DataType.values[i];
+
+                        return PopupMenuItem(
+                          value: type,
+                          child: Text("${dataTypeToPrettyString(type)} Preview"),
+                        );
+                      })
+                    ];
+                  }, onSelected: (value) {
+                    if (value is DataType) {
+                      tabs.add(dataTypeToObjectEditorTabType(value));
+                      setState(() {});
+                    }
+                  }),
                 ),
               ],
             ),
           ),
         ),
-        body: TabBarView(children: [
+        body: TabBarView(physics: NeverScrollableScrollPhysics(), children: [
           ...List.generate(tabs.length, (i) {
             ObjectEditorTabType type = tabs[i];
         
             return Center(
-              child: objectEditorTabTypeContent(context, type),
+              child: objectEditorTabTypeContent(context, type, widget.root),
             );
           }),
         ]),
@@ -94,24 +142,24 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> {
     }
   }
 
-  ObjectType? objectEditorTabTypeToObjectType(ObjectEditorTabType objectEditorTabType) {
+  DataType? objectEditorTabTypeToObjectType(ObjectEditorTabType objectEditorTabType) {
     switch (objectEditorTabType) {
-      case ObjectEditorTabType.json: return ObjectType.json;
-      case ObjectEditorTabType.yaml: return ObjectType.yaml;
-      case ObjectEditorTabType.plist: return ObjectType.plist;
+      case ObjectEditorTabType.json: return DataType.json;
+      case ObjectEditorTabType.yaml: return DataType.yaml;
+      case ObjectEditorTabType.plist: return DataType.plist;
       default: return null;
     }
   }
 
-  Widget objectEditorTabTypeContent(BuildContext context, ObjectEditorTabType objectEditorTabType) {
+  Widget objectEditorTabTypeContent(BuildContext context, ObjectEditorTabType objectEditorTabType, RootNode root) {
     switch (objectEditorTabType) {
       case ObjectEditorTabType.base: return ObjectEditorDesktop(root: widget.root);
       case ObjectEditorTabType.settings: return ObjectEditorSettings();
 
       default: 
-        ObjectType? type = objectEditorTabTypeToObjectType(objectEditorTabType);
+        DataType? type = objectEditorTabTypeToObjectType(objectEditorTabType);
         if (type == null) throw Exception("Invalid editor type: $objectEditorTabType");
-        return ObjectEditorPreview(type: type);
+        return ObjectEditorPreview(type: type, root: root);
     }
   }
 }
