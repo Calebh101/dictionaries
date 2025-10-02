@@ -16,6 +16,7 @@ enum NodeType {
   map,
   date,
   data,
+  dynamic,
 }
 
 enum RootNodeType {
@@ -33,6 +34,7 @@ String nodeTypeToString(NodeType type) {
     case NodeType.map: return "Dictionary";
     case NodeType.date: return "Date";
     case NodeType.data: return "Data";
+    case NodeType.dynamic: return "Custom";
   }
 }
 
@@ -68,10 +70,14 @@ abstract class NodeData {
     throw UnimplementedError('fromBinary must be implemented by subclasses.');
   }
 
+  factory NodeData.fromXml(Uint8List bytes) {
+    throw UnimplementedError('fromXml must be implemented by subclasses.');
+  }
+
   Node get node;
   bool get isRoot => false;
 
-  Uint8List toBinary();
+  List<int> toBinary();
   Object? toJson();
 }
 
@@ -79,18 +85,36 @@ abstract class Node<T> extends NodeData {
   NodeType type;
   T input;
   int index;
+  List<NodeAttribute> attributes;
 
-  Node({required this.type, required this.input, required super.children, required this.index});
+  Node({required this.type, required this.input, required super.children, required this.index, required this.attributes});
   bool get hasChildren => children.isNotEmpty;
   T get defaultValue;
 
   @override
   Node get node => this;
+
+  Uint8List attributesToBinary() {
+    List<int> bytes = [];
+
+    for (NodeAttribute attribute in attributes) {
+      bytes.addAll([...utf8.encode(attribute.name), 0x00, ...utf8.encode(attribute.value), 0x00]);
+    }
+
+    return Uint8List.fromList(bytes);
+  }
+}
+
+class NodeAttribute {
+  String name;
+  String value;
+
+  NodeAttribute(this.name, this.value);
 }
 
 class RootTreeNode extends Node<void> {
   final RootNode root;
-  RootTreeNode({required this.root, required super.children, required super.type}) : super(input: null, index: 0);
+  RootTreeNode({required this.root, required super.children, required super.type}) : super(input: null, index: 0, attributes: []);
 
   @override
   void get defaultValue => throw UnimplementedError();
@@ -100,12 +124,12 @@ class RootTreeNode extends Node<void> {
 
   @override
   Uint8List toBinary() {
-    List<Uint8List> chunks = children.map((x) => x.toBinary()).toList();
+    List<List<int>> chunks = children.map((x) => x.toBinary()).toList();
     int totalLength = chunks.fold(0, (sum, chunk) => sum + chunk.length);
     Uint8List combined = Uint8List(totalLength);
     int offset = 0;
 
-    for (Uint8List chunk in chunks) {
+    for (List<int> chunk in chunks) {
       combined.setRange(offset, offset + chunk.length, chunk);
       offset += chunk.length;
     }
@@ -145,12 +169,12 @@ class RootNode {
   RootNode.clean({required this.type}) : children = const [];
 
   Uint8List toBinary() {
-    List<Uint8List> chunks = children.map((x) => x.toBinary()).toList();
+    List<List<int>> chunks = children.map((x) => x.toBinary()).toList();
     int totalLength = chunks.fold(0, (sum, chunk) => sum + chunk.length);
     Uint8List combined = Uint8List(totalLength);
     int offset = 0;
 
-    for (Uint8List chunk in chunks) {
+    for (List<int> chunk in chunks) {
       combined.setRange(offset, offset + chunk.length, chunk);
       offset += chunk.length;
     }
@@ -226,26 +250,26 @@ class RootNode {
   static RootNode fromObject(Object? input) {
     Node process(Object? input, [int index = -1]) {
       if (input is String) {
-        return StringNode(input, index: index);
+        return StringNode(input, index: index, attributes: []);
       } else if (input is num) {
-        return NumberNode(input, index: index);
+        return NumberNode(input, index: index, attributes: []);
       } else if (input is bool) {
-        return BooleanNode(input, index: index);
+        return BooleanNode(input, index: index, attributes: []);
       } else if (input == null) {
-        return EmptyNode(index: index);
+        return EmptyNode(index: index, attributes: []);
       } else if (input is List) {
         return ArrayNode(input.map((value) {
           index++;
           return process(value, index);
-        }).toList(), index: index);
+        }).toList(), index: index, attributes: []);
       } else if (input is Map) {
         return MapNode(input.entries.map((entry) {
           return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value));
-        }).toList(), index: index);
+        }).toList(), index: index, attributes: []);
       } else if (input is DateTime) {
-        return DateNode(input, index: index);
+        return DateNode(input, index: index, attributes: []);
       } else if (input is Uint8List) {
-        return DataNode(input, index: index);
+        return DataNode(input, index: index, attributes: []);
       } else if (input is Node) {
         return input;
       } else {
@@ -277,7 +301,7 @@ class RootNode {
   }
 
   static RootNode fromJson(String raw) {
-    return RootNode.fromObject(jsonDecode(raw));
+    return fromObject(jsonDecode(raw));
   }
 
   static RootNode fromPlist(String input) {
@@ -285,7 +309,11 @@ class RootNode {
   }
 
   static RootNode fromYaml(String input) {
-    return loadYaml(input);
+    return fromObject(loadYaml(input));
+  }
+
+  static RootNode fromXml(String input) {
+    throw UnimplementedError();
   }
 
   static RootNode? tryParse(String raw) {
@@ -309,11 +337,28 @@ class RootNode {
   }
 }
 
-class StringNode extends Node<String> {
-  StringNode(String input, {super.index = 0}) : super(type: NodeType.string, input: input, children: []);
-
+class CustomNode extends Node {
+  CustomNode(XmlText input, {super.index = 0, required super.attributes}) : super(type: NodeType.dynamic, input: input, children: []);
+  
+  @override
+  get defaultValue => CustomNode(XmlText(""), attributes: []);
+  
   @override
   Uint8List toBinary() {
+    return utf8.encode(input.value);
+  }
+  
+  @override
+  Object? toJson() {
+    throw NodeInvalidConversionException("CustomNode", "JSON");
+  }
+}
+
+class StringNode extends Node<String> {
+  StringNode(String input, {super.index = 0, required super.attributes}) : super(type: NodeType.string, input: input, children: []);
+
+  @override
+  List<int> toBinary() {
     return utf8.encode(input);
   }
 
@@ -327,10 +372,10 @@ class StringNode extends Node<String> {
 }
 
 class NumberNode extends Node<num> {
-  NumberNode(num input, {super.index = 0}) : super(type: NodeType.number, input: input, children: []);
+  NumberNode(num input, {super.index = 0, required super.attributes}) : super(type: NodeType.number, input: input, children: []);
 
   @override
-  Uint8List toBinary() {
+  List<int> toBinary() {
     Uint8List output = Uint8List(9);
     ByteData data = ByteData(8);
 
@@ -356,10 +401,10 @@ class NumberNode extends Node<num> {
 }
 
 class BooleanNode extends Node<bool> {
-  BooleanNode(bool input, {super.index = 0}) : super(type: NodeType.boolean, input: input, children: []);
+  BooleanNode(bool input, {super.index = 0, required super.attributes}) : super(type: NodeType.boolean, input: input, children: []);
 
   @override
-  Uint8List toBinary() {
+  List<int> toBinary() {
     return Uint8List.fromList([input ? 1 : 0]);
   }
 
@@ -373,10 +418,10 @@ class BooleanNode extends Node<bool> {
 }
 
 class EmptyNode extends Node<void> {
-  EmptyNode({super.index = 0}) : super(type: NodeType.empty, input: null, children: []);
+  EmptyNode({super.index = 0, required super.attributes}) : super(type: NodeType.empty, input: null, children: []);
 
   @override
-  Uint8List toBinary() {
+  List<int> toBinary() {
     return Uint8List(0);
   }
 
@@ -390,12 +435,12 @@ class EmptyNode extends Node<void> {
 }
 
 class ArrayNode extends Node<void> {
-  ArrayNode(List<Node> input, {super.index = 0}) : super(type: NodeType.array, input: null, children: input);
+  ArrayNode(List<Node> input, {super.index = 0, required super.attributes}) : super(type: NodeType.array, input: null, children: input);
 
   @override
-  Uint8List toBinary() {
+  List<int> toBinary() {
     int headerLength = 5;
-    List<Uint8List> childrenBytes = children.map((x) => x.toBinary()).toList();
+    List<List<int>> childrenBytes = children.map((x) => x.toBinary()).toList();
     int totalLength = headerLength + childrenBytes.fold(0, (sum, b) => sum + b.length);
     Uint8List data = Uint8List(totalLength);
     ByteData lengthData = ByteData(headerLength);
@@ -405,7 +450,7 @@ class ArrayNode extends Node<void> {
     data.setRange(1, headerLength, lengthData.buffer.asUint8List());
     int offset = headerLength;
 
-    for (Uint8List child in childrenBytes) {
+    for (List<int> child in childrenBytes) {
       data.setRange(offset, offset + child.length, child);
       offset += child.length;
     }
@@ -421,12 +466,12 @@ class ArrayNode extends Node<void> {
 }
 
 class MapNode extends Node<void> {
-  MapNode(List<NodeKeyValuePair> input, {super.index = 0}) : super(type: NodeType.map, input: null, children: input);
+  MapNode(List<NodeKeyValuePair> input, {super.index = 0, required super.attributes}) : super(type: NodeType.map, input: null, children: input);
 
   @override
-  Uint8List toBinary() {
+  List<int> toBinary() {
     int headerLength = 5;
-    List<Uint8List> childrenBytes = children.map((x) => x.toBinary()).toList();
+    List<List<int>> childrenBytes = children.map((x) => x.toBinary()).toList();
     int totalLength = headerLength + childrenBytes.fold(0, (sum, b) => sum + b.length);
     Uint8List data = Uint8List(totalLength);
     ByteData lengthData = ByteData(headerLength);
@@ -436,7 +481,7 @@ class MapNode extends Node<void> {
     data.setRange(1, headerLength, lengthData.buffer.asUint8List());
     int offset = headerLength;
 
-    for (Uint8List child in childrenBytes) {
+    for (List<int> child in childrenBytes) {
       data.setRange(offset, offset + child.length, child);
       offset += child.length;
     }
@@ -452,10 +497,10 @@ class MapNode extends Node<void> {
 }
 
 class DateNode extends Node<DateTime> {
-  DateNode(DateTime input, {super.index = 0}) : super(type: NodeType.date, input: input, children: []);
+  DateNode(DateTime input, {super.index = 0, required super.attributes}) : super(type: NodeType.date, input: input, children: []);
 
   @override
-  Uint8List toBinary() {
+  List<int> toBinary() {
     int ms = DateTime.now().millisecondsSinceEpoch;
     ByteData data = ByteData(8);
     data.setInt64(0, ms);
@@ -472,10 +517,10 @@ class DateNode extends Node<DateTime> {
 }
 
 class DataNode extends Node<Uint8List> {
-  DataNode(Uint8List input, {super.index = 0}) : super(type: NodeType.data, input: input, children: []);
+  DataNode(Uint8List input, {super.index = 0, required super.attributes}) : super(type: NodeType.data, input: input, children: []);
 
   @override
-  Uint8List toBinary() {
+  List<int> toBinary() {
     return input;
   }
 
@@ -486,4 +531,16 @@ class DataNode extends Node<Uint8List> {
 
   @override
   Uint8List get defaultValue => Uint8List(0);
+}
+
+class NodeInvalidConversionException implements Exception {
+  String node;
+  String target;
+
+  NodeInvalidConversionException(this.node, this.target);
+
+  @override
+  String toString() {
+    return "NodeInvalidConversionException: $node to $target";
+  }
 }
