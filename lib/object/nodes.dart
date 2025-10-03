@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:json2yaml/json2yaml.dart';
 import 'package:plist_parser/plist_parser.dart';
 import 'package:styled_logger/styled_logger.dart';
+import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
 import 'package:yaml/yaml.dart';
 
@@ -22,6 +23,26 @@ enum NodeType {
 enum RootNodeType {
   array,
   map,
+}
+
+enum NodeConversionMode {
+  json,
+  yaml,
+  plist,
+}
+
+Object? getDefaultValue(NodeType type) {
+  switch (type) {
+    case NodeType.string: return "";
+    case NodeType.number: return 0;
+    case NodeType.boolean: return false;
+    case NodeType.empty: return null;
+    case NodeType.array: return [];
+    case NodeType.map: return {};
+    case NodeType.date: return DateTime.now();
+    case NodeType.data: return Uint8List(8);
+    case NodeType.dynamic: return null;
+  }
 }
 
 String nodeTypeToString(NodeType type) {
@@ -64,7 +85,9 @@ Object? _toSpecified(NodeType type, List<NodeData> children, Object? Function(No
 
 abstract class NodeData {
   List<NodeData> children;
-  NodeData({required this.children});
+  String id;
+  int index = 0;
+  NodeData({required this.children}) : id = Uuid().v4();
 
   factory NodeData.fromBinary(Uint8List bytes) {
     throw UnimplementedError('fromBinary must be implemented by subclasses.');
@@ -76,32 +99,95 @@ abstract class NodeData {
 
   Node get node;
   bool get isRoot => false;
-
-  List<int> toBinary();
-  Object? toJson();
 }
 
-abstract class Node<T> extends NodeData {
-  NodeType type;
-  T input;
-  int index;
+class Node extends NodeData {
+  Object? input;
   List<NodeAttribute> attributes;
 
-  Node({required this.type, required this.input, required super.children, required this.index, required this.attributes});
+  @override
+  bool isRoot;
+
+  Node({required this.input, super.children = const [], this.attributes = const [], this.isRoot = false});
   bool get hasChildren => children.isNotEmpty;
-  T get defaultValue;
 
   @override
   Node get node => this;
 
+  NodeType get type => _identify();
+
   Uint8List attributesToBinary() {
     List<int> bytes = [];
+    for (NodeAttribute attribute in attributes) bytes.addAll([...utf8.encode(attribute.name), 0x00, ...utf8.encode(attribute.value), 0x00]);
+    return Uint8List.fromList(bytes);
+  }
 
-    for (NodeAttribute attribute in attributes) {
-      bytes.addAll([...utf8.encode(attribute.name), 0x00, ...utf8.encode(attribute.value), 0x00]);
+  static Object? toJson(NodeData input, NodeConversionMode mode) {
+    Object? process(NodeData input) {
+      if (input is Node) {
+        NodeType type = input.type;
+
+        if (type == NodeType.empty) {
+          return null;
+        } else if (type == NodeType.string) {
+          return input.input as String;
+        } else if (type == NodeType.number) {
+          return input.input as num;
+        } else if (type == NodeType.boolean) {
+          return input.input == true;
+        } else if (type == NodeType.dynamic) {
+          return input.input;
+        } else if (type == NodeType.date) {
+          return switch (mode) {
+            NodeConversionMode.json => (input.input as DateTime).toIso8601String(),
+            NodeConversionMode.plist || NodeConversionMode.yaml => input.input as DateTime,
+          };
+        } else if (type == NodeType.data) {
+          return switch (mode) {
+            NodeConversionMode.json || NodeConversionMode.yaml => base64.encode(input.input as List<int>),
+            NodeConversionMode.plist => input.input as Uint8List,
+          };
+        } else if (type == NodeType.array || type == NodeType.map) {
+          return input.children.map((x) => process(x)).toList();
+        } else {
+          throw UnimplementedError();
+        }
+      } else if (input is NodeKeyValuePair) {
+        return {
+          input.key: process(input.node),
+        };
+      } else {
+        throw UnimplementedError();
+      }
     }
 
-    return Uint8List.fromList(bytes);
+    return process(input);
+  }
+
+  NodeType _identify() {
+    if (hasChildren) {
+      if (children.every((x) => x is NodeKeyValuePair)) {
+        return NodeType.map;
+      } else if (children.every((x) => x is Node)) {
+        return NodeType.array;
+      } else {
+        throw UnsupportedError("Node $id has children, but has an inconsistent children map.");
+      }
+    } else if (input == null) {
+      return NodeType.empty;
+    } else if (input is String) {
+      return NodeType.string;
+    } else if (input is num) {
+      return NodeType.number;
+    } else if (input is bool) {
+      return NodeType.boolean;
+    } else if (input is DateTime) {
+      return NodeType.date;
+    } else if (input is Uint8List) {
+      return NodeType.data;
+    } else {
+      return NodeType.dynamic;
+    }
   }
 }
 
@@ -112,35 +198,6 @@ class NodeAttribute {
   NodeAttribute(this.name, this.value);
 }
 
-class RootTreeNode extends Node<void> {
-  final RootNode root;
-  RootTreeNode({required this.root, required super.children, required super.type}) : super(input: null, index: 0, attributes: []);
-
-  @override
-  void get defaultValue => throw UnimplementedError();
-
-  @override
-  bool get isRoot => true;
-
-  @override
-  Uint8List toBinary() {
-    List<List<int>> chunks = children.map((x) => x.toBinary()).toList();
-    int totalLength = chunks.fold(0, (sum, chunk) => sum + chunk.length);
-    Uint8List combined = Uint8List(totalLength);
-    int offset = 0;
-
-    for (List<int> chunk in chunks) {
-      combined.setRange(offset, offset + chunk.length, chunk);
-      offset += chunk.length;
-    }
-
-    return combined;
-  }
-  
-  @override
-  Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
-}
-
 class NodeKeyValuePair extends NodeData {
   String key;
   Node value;
@@ -149,16 +206,6 @@ class NodeKeyValuePair extends NodeData {
 
   @override
   Node get node => value;
-
-  @override
-  Uint8List toBinary() {
-    return Uint8List.fromList([...utf8.encode(key), 0x00, ...value.toBinary()]);
-  }
-
-  @override
-  Object? toJson() {
-    return {key: value.toJson()};
-  }
 }
 
 class RootNode {
@@ -168,22 +215,9 @@ class RootNode {
   RootNode({required this.children, required this.type});
   RootNode.clean({required this.type}) : children = const [];
 
-  Uint8List toBinary() {
-    List<List<int>> chunks = children.map((x) => x.toBinary()).toList();
-    int totalLength = chunks.fold(0, (sum, chunk) => sum + chunk.length);
-    Uint8List combined = Uint8List(totalLength);
-    int offset = 0;
-
-    for (List<int> chunk in chunks) {
-      combined.setRange(offset, offset + chunk.length, chunk);
-      offset += chunk.length;
-    }
-
-    return combined;
-  }
-
-  Object? toJson() => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => x.toJson());
-  XmlDocument toPlist({bool showNull = false}) => _toPlist(toJson());
+  Object? _toJson(NodeConversionMode mode) => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => Node.toJson(x, mode));
+  Object? toJson() => _toJson(NodeConversionMode.json);
+  XmlDocument toPlist({bool showNull = false}) => _toPlist(_toJson(NodeConversionMode.plist));
 
   String toJsonString() {
     JsonEncoder encoder = JsonEncoder.withIndent('  ');
@@ -249,31 +283,19 @@ class RootNode {
 
   static RootNode fromObject(Object? input) {
     Node process(Object? input, [int index = -1]) {
-      if (input is String) {
-        return StringNode(input, index: index, attributes: []);
-      } else if (input is num) {
-        return NumberNode(input, index: index, attributes: []);
-      } else if (input is bool) {
-        return BooleanNode(input, index: index, attributes: []);
-      } else if (input == null) {
-        return EmptyNode(index: index, attributes: []);
-      } else if (input is List) {
-        return ArrayNode(input.map((value) {
+      if (input is List) {
+        return Node(input: null, children: input.map((value) {
           index++;
           return process(value, index);
-        }).toList(), index: index, attributes: []);
+        }).toList(), attributes: []);
       } else if (input is Map) {
-        return MapNode(input.entries.map((entry) {
+        return Node(input: null, children: input.entries.map((entry) {
           return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value));
-        }).toList(), index: index, attributes: []);
-      } else if (input is DateTime) {
-        return DateNode(input, index: index, attributes: []);
-      } else if (input is Uint8List) {
-        return DataNode(input, index: index, attributes: []);
+        }).toList(), attributes: []);
       } else if (input is Node) {
         return input;
       } else {
-        throw UnimplementedError();
+        return Node(input: input, children: [], attributes: []);
       }
     }
     
@@ -334,213 +356,5 @@ class RootNode {
         }
       }
     }
-  }
-}
-
-class CustomNode extends Node {
-  CustomNode(XmlText input, {super.index = 0, required super.attributes}) : super(type: NodeType.dynamic, input: input, children: []);
-  
-  @override
-  get defaultValue => CustomNode(XmlText(""), attributes: []);
-  
-  @override
-  Uint8List toBinary() {
-    return utf8.encode(input.value);
-  }
-  
-  @override
-  Object? toJson() {
-    throw NodeInvalidConversionException("CustomNode", "JSON");
-  }
-}
-
-class StringNode extends Node<String> {
-  StringNode(String input, {super.index = 0, required super.attributes}) : super(type: NodeType.string, input: input, children: []);
-
-  @override
-  List<int> toBinary() {
-    return utf8.encode(input);
-  }
-
-  @override
-  Object? toJson() {
-    return input;
-  }
-
-  @override
-  String get defaultValue => "";
-}
-
-class NumberNode extends Node<num> {
-  NumberNode(num input, {super.index = 0, required super.attributes}) : super(type: NodeType.number, input: input, children: []);
-
-  @override
-  List<int> toBinary() {
-    Uint8List output = Uint8List(9);
-    ByteData data = ByteData(8);
-
-    if (input is int) {
-      output[0] = 0;
-      data.setUint64(0, input as int);
-    } else if (input is double) {
-      output[0] = 1;
-      data.setFloat64(0, input as double);
-    }
-
-    output.setRange(1, data.lengthInBytes + 1, data.buffer.asUint8List());
-    return output;
-  }
-
-  @override
-  Object? toJson() {
-    return input;
-  }
-
-  @override
-  num get defaultValue => 0;
-}
-
-class BooleanNode extends Node<bool> {
-  BooleanNode(bool input, {super.index = 0, required super.attributes}) : super(type: NodeType.boolean, input: input, children: []);
-
-  @override
-  List<int> toBinary() {
-    return Uint8List.fromList([input ? 1 : 0]);
-  }
-
-  @override
-  Object? toJson() {
-    return input;
-  }
-
-  @override
-  bool get defaultValue => false;
-}
-
-class EmptyNode extends Node<void> {
-  EmptyNode({super.index = 0, required super.attributes}) : super(type: NodeType.empty, input: null, children: []);
-
-  @override
-  List<int> toBinary() {
-    return Uint8List(0);
-  }
-
-  @override
-  Object? toJson() {
-    return null;
-  }
-
-  @override
-  void get defaultValue {}
-}
-
-class ArrayNode extends Node<void> {
-  ArrayNode(List<Node> input, {super.index = 0, required super.attributes}) : super(type: NodeType.array, input: null, children: input);
-
-  @override
-  List<int> toBinary() {
-    int headerLength = 5;
-    List<List<int>> childrenBytes = children.map((x) => x.toBinary()).toList();
-    int totalLength = headerLength + childrenBytes.fold(0, (sum, b) => sum + b.length);
-    Uint8List data = Uint8List(totalLength);
-    ByteData lengthData = ByteData(headerLength);
-
-    lengthData.setUint32(0, children.length);
-    data[0] = 1;
-    data.setRange(1, headerLength, lengthData.buffer.asUint8List());
-    int offset = headerLength;
-
-    for (List<int> child in childrenBytes) {
-      data.setRange(offset, offset + child.length, child);
-      offset += child.length;
-    }
-
-    return data;
-  }
-
-  @override
-  Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
-
-  @override
-  void get defaultValue {}
-}
-
-class MapNode extends Node<void> {
-  MapNode(List<NodeKeyValuePair> input, {super.index = 0, required super.attributes}) : super(type: NodeType.map, input: null, children: input);
-
-  @override
-  List<int> toBinary() {
-    int headerLength = 5;
-    List<List<int>> childrenBytes = children.map((x) => x.toBinary()).toList();
-    int totalLength = headerLength + childrenBytes.fold(0, (sum, b) => sum + b.length);
-    Uint8List data = Uint8List(totalLength);
-    ByteData lengthData = ByteData(headerLength);
-
-    lengthData.setUint32(0, children.length);
-    data[0] = 0;
-    data.setRange(1, headerLength, lengthData.buffer.asUint8List());
-    int offset = headerLength;
-
-    for (List<int> child in childrenBytes) {
-      data.setRange(offset, offset + child.length, child);
-      offset += child.length;
-    }
-
-    return data;
-  }
-
-  @override
-  Object? toJson() => _toSpecified(type, children, (x) => x.toJson());
-
-  @override
-  void get defaultValue {}
-}
-
-class DateNode extends Node<DateTime> {
-  DateNode(DateTime input, {super.index = 0, required super.attributes}) : super(type: NodeType.date, input: input, children: []);
-
-  @override
-  List<int> toBinary() {
-    int ms = DateTime.now().millisecondsSinceEpoch;
-    ByteData data = ByteData(8);
-    data.setInt64(0, ms);
-    return data.buffer.asUint8List();
-  }
-
-  @override
-  Object? toJson() {
-    return input.toIso8601String();
-  }
-
-  @override
-  DateTime get defaultValue => DateTime.now();
-}
-
-class DataNode extends Node<Uint8List> {
-  DataNode(Uint8List input, {super.index = 0, required super.attributes}) : super(type: NodeType.data, input: input, children: []);
-
-  @override
-  List<int> toBinary() {
-    return input;
-  }
-
-  @override
-  Object? toJson() {
-    return base64Encode(input);
-  }
-
-  @override
-  Uint8List get defaultValue => Uint8List(0);
-}
-
-class NodeInvalidConversionException implements Exception {
-  String node;
-  String target;
-
-  NodeInvalidConversionException(this.node, this.target);
-
-  @override
-  String toString() {
-    return "NodeInvalidConversionException: $node to $target";
   }
 }

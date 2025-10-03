@@ -1,13 +1,10 @@
-import 'dart:convert';
-
 import 'package:dictionaries/object/nodes.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
-import 'package:json2yaml/json2yaml.dart';
-import 'package:localpkg/dialogue.dart';
 import 'package:menu_bar/menu_bar.dart';
-import 'package:xml/xml.dart';
+import 'package:styled_logger/styled_logger.dart';
+
+List<NodeData> currentExpanded = [];
 
 class ObjectEditorDesktop extends StatefulWidget {
   final RootNode root;
@@ -23,7 +20,15 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
   @override
   void initState() {
-    controller = TreeController<NodeData>(roots: [RootTreeNode(root: widget.root, children: widget.root.children, type: rootNodeTypeToNodeType(widget.root.type))], childrenProvider: (node) => node.children);
+    Node root = Node(input: widget.root, children: widget.root.children, isRoot: true);
+    controller = TreeController<NodeData>(roots: [root], childrenProvider: (node) => node.children);
+    controller.expand(root);
+
+    controller.addListener(() async {
+      currentExpanded = controller.toggledNodes.toList();
+    });
+
+    reloadExpanded();
     super.initState();
   }
 
@@ -32,39 +37,19 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
     setState(() {});
   }
 
+  void reloadExpanded() {
+    Logger.print("Reloading ${currentExpanded.length} expansions...");
+    for (NodeData node in currentExpanded) controller.expand(node);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MenuBarWidget(
-      barButtons: [
-        BarButton(text: Text("File"), submenu: SubMenu(
-          menuItems: [
-            MenuButton(text: Text("Copy as JSON"), onTap: () {
-              Object? data = widget.root.toJson();
-              String text = jsonEncode(data);
-
-              Clipboard.setData(ClipboardData(text: text));
-              SnackBarManager.show(context, "Copied ${text.codeUnits.length} bytes!");
-            }),
-            MenuButton(text: Text("Copy as YAML"), onTap: () {
-              Object? data = widget.root.toJson();
-              String text = json2yaml(data as Map<String, dynamic>);
-
-              Clipboard.setData(ClipboardData(text: text));
-              SnackBarManager.show(context, "Copied ${text.codeUnits.length} bytes!");
-            }),
-            MenuButton(text: Text("Copy as PList"), onTap: () {
-              XmlDocument data = widget.root.toPlist();
-              String text = widget.root.toPlistString();
-
-              Clipboard.setData(ClipboardData(text: text));
-              SnackBarManager.show(context, "Copied ${text.codeUnits.length} bytes!");
-            }),
-          ],
-        )),
-      ],
+      barButtons: [],
       child: AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
         if (entry.node.isRoot) {
-          RootTreeNode node = entry.node as RootTreeNode;
+          Node node = entry.node as Node;
+          RootNode root = node.input as RootNode;
 
           return InkWell(
             child: Padding(
@@ -110,9 +95,8 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                   );
                                 }).toList(), onChanged: (value) {
                                   if (value == null) return;
-                                  // TODO
                                   refresh(tree: true);
-                                }, value: node.root.type),
+                                }, value: root.type),
                               ),
                             ],
                           );
@@ -132,18 +116,24 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
           );
         }
 
-        late Node node;
         NodeData data = entry.node;
         String title = "Unknown";
       
         if (data is Node) {
-          node = data;
-          title = node.index.toString();
+          title = data.index.toString();
         }
       
         if (data is NodeKeyValuePair) {
-          node = data.value;
           title = data.key;
+        }
+
+        if (data.node.type == NodeType.map || data.node.type == NodeType.array) {
+          int i = 0;
+
+          for (NodeData child in data.node.children) {
+            child.index = i;
+            i++;
+          }
         }
       
         return InkWell(
@@ -180,7 +170,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                             ),
                             SizedBox(
                               width: width3,
-                              child: node.input != null ? SelectableText(node.hasChildren ? "${node.children.length} Children" : node.input.toString(), textAlign: TextAlign.center) : SizedBox.shrink(),
+                              child: data.node.input != null ? SelectableText(data.node.hasChildren ? "${data.node.children.length} Children" : data.node.input.toString(), textAlign: TextAlign.center) : SizedBox.shrink(),
                             ),
                             SizedBox(
                               width: width2,
@@ -190,11 +180,46 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                   value: type,
                                   child: Text(nodeTypeToString(type), textAlign: TextAlign.center),
                                 );
-                              }).toList(), onChanged: (value) {
-                                if (value == null) return;
-                                // TODO
+                              }).toList(), onChanged: (type) {
+                                if (type == null) return;
+                                
+                                if (type == NodeType.map) {
+                                  data.node.input = null;
+                                  List<NodeKeyValuePair> children = [];
+
+                                  for (NodeData child in data.node.children) {
+                                    if (child is Node) {
+                                      children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
+                                    } else if (child is NodeKeyValuePair) {
+                                      children.add(child);
+                                    }
+                                  }
+
+                                  data.node.children = children;
+                                } else if (type == NodeType.array) {
+                                  data.node.input = null;
+                                  List<Node> children = [];
+
+                                  for (NodeData child in data.node.children) {
+                                    if (child is Node) {
+                                      children.add(child);
+                                    } else if (child is NodeKeyValuePair) {
+                                      children.add(Node(input: child.node.input));
+                                    }
+                                  }
+
+                                  data.node.children = children;
+                                } else {
+                                  if (data is Node) {
+                                    data = Node(input: getDefaultValue(type));
+                                  } else if (data is NodeKeyValuePair) {
+                                    data = NodeKeyValuePair(key: (data as NodeKeyValuePair).key, value: Node(input: getDefaultValue(type)));
+                                  }
+                                }
+                                
+                                print("Changing node to $type... (${data.node.children.length} children)");
                                 refresh(tree: true);
-                              }, value: node.type),
+                              }, value: data.node.type),
                             ),
                           ],
                         );
