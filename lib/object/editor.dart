@@ -7,8 +7,7 @@ import 'package:styled_logger/styled_logger.dart';
 List<NodeData> currentExpanded = [];
 
 class ObjectEditorDesktop extends StatefulWidget {
-  final RootNode root;
-  const ObjectEditorDesktop({super.key, required this.root});
+  const ObjectEditorDesktop({super.key});
 
   @override
   State<ObjectEditorDesktop> createState() => _ObjectEditorState();
@@ -20,7 +19,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
   @override
   void initState() {
-    Node root = Node(input: widget.root, children: widget.root.children, isRoot: true);
+    Node root = Node(input: RootNode.instance, children: RootNode.instance.children, isRoot: true);
     controller = TreeController<NodeData>(roots: [root], childrenProvider: (node) => node.children);
     controller.expand(root);
 
@@ -142,16 +141,14 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
             child: TreeIndentation(
               child: Row(
                 children: [
-                  if (data.children.isNotEmpty)
-                  ExpandIcon(
-                    size: 24,
-                    isExpanded: entry.isExpanded,
-                    onPressed: (value) => controller.toggleExpansion(entry.node),
-                  )
-                  else
                   SizedBox(
                     width: 40,
                     height: 32,
+                    child: data.children.isNotEmpty ? ExpandIcon(
+                      size: 24,
+                      isExpanded: entry.isExpanded,
+                      onPressed: (value) => controller.toggleExpansion(entry.node),
+                    ) : null,
                   ),
                   Expanded(
                     child: LayoutBuilder(
@@ -161,67 +158,73 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                         double width3 = maxWidth * 0.3;
                         double width1 = constraints.maxWidth - width2 - width3;
       
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            SizedBox(
-                              width: width1,
-                              child: SelectableText(title, textAlign: TextAlign.left),
-                            ),
-                            SizedBox(
-                              width: width3,
-                              child: data.node.input != null ? SelectableText(data.node.hasChildren ? "${data.node.children.length} Children" : data.node.input.toString(), textAlign: TextAlign.center) : SizedBox.shrink(),
-                            ),
-                            SizedBox(
-                              width: width2,
-                              child: DropdownButton<NodeType>(items: NodeType.values.map((type) {
-                                return DropdownMenuItem<NodeType>(
-                                  alignment: AlignmentGeometry.center,
-                                  value: type,
-                                  child: Text(nodeTypeToString(type), textAlign: TextAlign.center),
-                                );
-                              }).toList(), onChanged: (type) {
-                                if (type == null) return;
-                                
-                                if (type == NodeType.map) {
-                                  data.node.input = null;
-                                  List<NodeKeyValuePair> children = [];
-
-                                  for (NodeData child in data.node.children) {
-                                    if (child is Node) {
-                                      children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
-                                    } else if (child is NodeKeyValuePair) {
-                                      children.add(child);
+                        return TreeRowContainer(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                width: width1,
+                                child: SelectableText(title, textAlign: TextAlign.left),
+                              ),
+                              SizedBox(
+                                width: width3,
+                                child: data.node.input != null ? SelectableText(data.node.valueToString(), textAlign: TextAlign.center) : SizedBox.shrink(),
+                              ),
+                              SizedBox(
+                                width: width2,
+                                child: DropdownButton<NodeType>(isDense: true, items: NodeType.values.map((type) {
+                                  return DropdownMenuItem<NodeType>(
+                                    alignment: AlignmentGeometry.center,
+                                    value: type,
+                                    child: Text(nodeTypeToString(type), textAlign: TextAlign.center),
+                                  );
+                                }).toList(), onChanged: (type) {
+                                  if (type == null) return;
+                                  if (type == data.node.type) return;
+                                  
+                                  if (type == NodeType.map) {
+                                    data.node.input = null;
+                                    data.node.isParentType = 2;
+                                    List<NodeKeyValuePair> children = [];
+                          
+                                    for (NodeData child in data.node.children) {
+                                      if (child is Node) {
+                                        children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
+                                      } else if (child is NodeKeyValuePair) {
+                                        children.add(child);
+                                      }
                                     }
-                                  }
-
-                                  data.node.children = children;
-                                } else if (type == NodeType.array) {
-                                  data.node.input = null;
-                                  List<Node> children = [];
-
-                                  for (NodeData child in data.node.children) {
-                                    if (child is Node) {
-                                      children.add(child);
-                                    } else if (child is NodeKeyValuePair) {
-                                      children.add(Node(input: child.node.input));
+                          
+                                    data.node.children.clear();
+                                    data.node.children = children;
+                                  } else if (type == NodeType.array) {
+                                    data.node.input = null;
+                                    data.node.isParentType = 1;
+                                    List<Node> children = [];
+                          
+                                    for (NodeData child in data.node.children) {
+                                      if (child is Node) {
+                                        children.add(child);
+                                      } else if (child is NodeKeyValuePair) {
+                                        children.add(Node(input: child.node.input));
+                                      }
                                     }
+                          
+                                    data.node.children.clear();
+                                    data.node.children = children;
+                                  } else {
+                                    data.node.isParentType = 0;
+                                    data.children.clear();
+                                    data.node.input = getDefaultValue(type);
                                   }
-
-                                  data.node.children = children;
-                                } else {
-                                  if (data is Node) {
-                                    data = Node(input: getDefaultValue(type));
-                                  } else if (data is NodeKeyValuePair) {
-                                    data = NodeKeyValuePair(key: (data as NodeKeyValuePair).key, value: Node(input: getDefaultValue(type)));
-                                  }
-                                }
-                                
-                                print("Changing node to $type... (${data.node.children.length} children)");
-                                refresh(tree: true);
-                              }, value: data.node.type),
-                            ),
-                          ],
+                          
+                                  Logger.print("Changing node to $type... (value of ${data.node.input}) (${[data.node.input.runtimeType, data.node.type, data.node.identify(debug: true), data.children.isEmpty].join(" - ")}) (${data.children.length} children)");
+                                  RootNode.instance.rebuild();
+                                  refresh(tree: true);
+                                }, value: data.node.type),
+                              ),
+                            ],
+                          ),
                         );
                       }
                     ),
@@ -247,5 +250,35 @@ class EditorNodeWidgetData {
 
   EditorNodeWidgetData(Widget column1, Widget column2, Widget column3) {
     columns = [column1, column2, column3];
+  }
+}
+
+class TreeRowContainer extends StatefulWidget {
+  final Widget child;
+  const TreeRowContainer({super.key, required this.child});
+
+  @override
+  State<TreeRowContainer> createState() => _TreeRowContainerState();
+}
+
+class _TreeRowContainerState extends State<TreeRowContainer> {
+  bool hover = false;
+
+  void set(bool status) {
+    hover = status;
+    setState(() {});
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (event) => set(true),
+      onExit: (event) => set(false),
+      child: Container(
+        color: hover ? (Theme.of(context).brightness == Brightness.light ? const Color.fromARGB(255, 202, 202, 202) : const Color.fromARGB(255, 26, 35, 46)) : Colors.transparent,
+        padding: EdgeInsets.symmetric(vertical: 5),
+        child: widget.child,
+      ),
+    );
   }
 }

@@ -13,6 +13,7 @@ dependencies:
   flutter_fancy_tree_view: ^1.6.0
   flutter_highlight: ^0.7.0
   highlight: ^0.7.0
+  intl: ^0.20.2
   json2yaml: ^3.0.1
   linked_scroll_controller: ^0.2.0
   localpkg:
@@ -23,7 +24,6 @@ dependencies:
   mahop_data_table: ^1.0.6
   menu_bar: ^0.5.3
   plist_parser: ^0.2.5
-  reorderable_tabbar: ^1.0.6
   shared_preferences: ^2.5.3
   styled_logger: ^1.0.2
   tab_indicator_styler: ^2.0.0

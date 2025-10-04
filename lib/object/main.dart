@@ -205,8 +205,10 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
   }
 
   Widget objectEditorTabTypeContent(BuildContext context, ObjectEditorTabType objectEditorTabType, RootNode root) {
+    RootNode.assignInstance(widget.root);
+    
     switch (objectEditorTabType) {
-      case ObjectEditorTabType.base: return ObjectEditorDesktop(root: widget.root);
+      case ObjectEditorTabType.base: return ObjectEditorDesktop();
       case ObjectEditorTabType.settings: return ObjectEditorSettings();
 
       default: 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:intl/intl.dart';
 import 'package:json2yaml/json2yaml.dart';
 import 'package:plist_parser/plist_parser.dart';
 import 'package:styled_logger/styled_logger.dart';
@@ -40,7 +41,7 @@ Object? getDefaultValue(NodeType type) {
     case NodeType.array: return [];
     case NodeType.map: return {};
     case NodeType.date: return DateTime.now();
-    case NodeType.data: return Uint8List(8);
+    case NodeType.data: return Uint8List(4);
     case NodeType.dynamic: return null;
   }
 }
@@ -105,21 +106,80 @@ class Node extends NodeData {
   Object? input;
   List<NodeAttribute> attributes;
 
+  /// - 0: Not parent
+  /// - 1: Array
+  /// - 2: Map
+  int isParentType;
+
+  Node({required this.input, super.children = const [], this.attributes = const [], this.isRoot = false, this.isParentType = 0});
+
   @override
   bool isRoot;
-
-  Node({required this.input, super.children = const [], this.attributes = const [], this.isRoot = false});
-  bool get hasChildren => children.isNotEmpty;
 
   @override
   Node get node => this;
 
   NodeType get type => _identify();
+  NodeType identify({bool debug = false}) => _identify(debug: debug);
+  bool get hasChildren => children.isNotEmpty;
 
   Uint8List attributesToBinary() {
     List<int> bytes = [];
     for (NodeAttribute attribute in attributes) bytes.addAll([...utf8.encode(attribute.name), 0x00, ...utf8.encode(attribute.value), 0x00]);
     return Uint8List.fromList(bytes);
+  }
+
+  static Uint8List toBinary(NodeData node) {
+    if (node is Node) {
+      int type = node.type.index;
+
+      List<int> process() {
+        switch (node.type) {
+          case NodeType.string: return [...utf8.encode(node.input as String), 0x00];
+          case NodeType.number:
+            ByteData data = ByteData(8);
+            if (node.input is int) data.setInt64(0, node.input as int);
+            if (node.input is double) data.setFloat64(0, node.input as double);
+            return data.buffer.asUint8List();
+          case NodeType.empty: return [];
+          case NodeType.data: return node.input as Uint8List;
+          case NodeType.date:
+            ByteData data = ByteData(8);
+            data.setInt64(0, (node.input as DateTime).millisecondsSinceEpoch);
+            return data.buffer.asUint8List();
+          case NodeType.boolean: return [(node.input as bool) ? 1 : 0];
+          case NodeType.map:
+          case NodeType.array:
+            ByteData length = ByteData(4);
+            length.setInt32(0, node.children.length);
+            List<int> bytes = [];
+            for (Uint8List child in node.children.map((x) => toBinary(x))) bytes.addAll(child);
+            return [...length.buffer.asUint8List(), ...bytes];
+
+            // First we say how many children there are.
+            // Then we use [Node.toBinary] on those children too.
+          case NodeType.dynamic:
+            return (node.input as CustomNode).toBinary();
+        }
+      }
+
+      List<int> bytes = process();
+      ByteData length = ByteData(8);
+      length.setUint64(0, bytes.length);
+      return Uint8List.fromList([...utf8.encode("NODE"), type & 0xFF, ...length.buffer.asUint8List(), ...bytes]);
+
+      // First, we'll include "NODE" in UTF8 as the first 4 bytes.
+      // Second, we'll include the type as a single-byte integer.
+      // Then we'll include the length of the contents as an unsigned 64-bit integer.
+      // Finally, we'll include the actual content.
+    } else if (node is NodeKeyValuePair) {
+      // First, we'll include "NVKP" (NodeKeyValuePair) in UTF8 as the first 4 bytes.
+      // Then we'll include the null-terminated key.
+      // Finally we'll call [Node.toBinary] on the contents.
+      return Uint8List.fromList([...utf8.encode("NKVP"), ...utf8.encode(node.key), 0x00, ...toBinary(node.node)]);
+    } else {
+      throw UnimplementedError();
+    }
   }
 
   static Object? toJson(NodeData input, NodeConversionMode mode) {
@@ -164,15 +224,13 @@ class Node extends NodeData {
     return process(input);
   }
 
-  NodeType _identify() {
-    if (hasChildren) {
-      if (children.every((x) => x is NodeKeyValuePair)) {
-        return NodeType.map;
-      } else if (children.every((x) => x is Node)) {
-        return NodeType.array;
-      } else {
-        throw UnsupportedError("Node $id has children, but has an inconsistent children map.");
-      }
+  NodeType _identify({bool debug = false}) {
+    if (debug) Logger.print('Node $id debug: children=$children (${children.runtimeType}) isEmpty=${children.isEmpty}');
+
+    if (isParentType == 1) {
+      return NodeType.map;
+    } else if (isParentType == 2) {
+      return NodeType.array;
     } else if (input == null) {
       return NodeType.empty;
     } else if (input is String) {
@@ -185,8 +243,24 @@ class Node extends NodeData {
       return NodeType.date;
     } else if (input is Uint8List) {
       return NodeType.data;
-    } else {
+    } else if (input is CustomNode) {
       return NodeType.dynamic;
+    } else {
+      throw UnimplementedError();
+    }
+  }
+
+  String valueToString() {
+    switch (type) {
+      case NodeType.map:
+      case NodeType.array: return "${children.length} Children";
+      case NodeType.boolean: return (input as bool) ? "True" : "False";
+      case NodeType.data: return "0x${(input as Uint8List).map((b) => b.toRadixString(16).padLeft(2, '0')).join("")}";
+      case NodeType.date: return DateFormat("MMM d, y h:mm a").format(input as DateTime);
+      case NodeType.empty: return "Null";
+      case NodeType.number: return input.toString();
+      case NodeType.string: return input.toString();
+      case NodeType.dynamic: return input.toString();
     }
   }
 }
@@ -211,9 +285,32 @@ class NodeKeyValuePair extends NodeData {
 class RootNode {
   List<NodeData> children;
   RootNodeType type;
+  Map<String, NodeData> _lookup = {};
 
-  RootNode({required this.children, required this.type});
-  RootNode.clean({required this.type}) : children = const [];
+  RootNode({required this.children, required this.type}) {
+    rebuild();
+  }
+
+  RootNode.clean({required this.type}) : children = const [] {
+    rebuild();
+  }
+
+  static late RootNode instance;
+
+  void rebuild() {
+    _buildRootLookup();
+  }
+
+  void _buildRootLookup() {
+    _lookup = {};
+    for (NodeData child in children) _buildLookup(child);
+    Logger.print("Built root lookup of ${_lookup.length} entries");
+  }
+
+  void _buildLookup(NodeData node) {
+    _lookup[node.id] = node;
+    for (NodeData child in node.children) _buildLookup(child);
+  }
 
   Object? _toJson(NodeConversionMode mode) => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => Node.toJson(x, mode));
   Object? toJson() => _toJson(NodeConversionMode.json);
@@ -230,6 +327,22 @@ class RootNode {
 
   String toPlistString({bool showNull = false, bool pretty = true, String indent = '  '}) {
     return _toPlist(toJson(), showNull: showNull).toXmlString(pretty: pretty, indent: indent);
+  }
+
+  Uint8List toBinary() {
+    ByteData length = ByteData(8)..setUint64(0, children.length);
+    int headerSize = 64;
+    ByteData headerSizeData = ByteData(2)..setUint16(0, headerSize);
+
+    List<int> header = [...utf8.encode("DICTIONARY" /* 10 chars */), ...headerSizeData.buffer.asUint8List()];
+    if (header.length < headerSize) header.addAll(List.filled(headerSize - header.length, 0x00));
+
+    List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => Node.toBinary(x))];
+    return Uint8List.fromList([...header, ...body]);
+
+    // The first 10 bytes are the UTF8 of "DICTIONARY".
+    // The header offset is then included as an unsigned 16-bit integer.
+    // The body is first an unsigned 64-bit integer with the length of the children, followed by the children contents. This is continued in [Node.toBinary].
   }
 
   static XmlDocument _toPlist(Object? input, {bool showNull = false}) {
@@ -284,12 +397,12 @@ class RootNode {
   static RootNode fromObject(Object? input) {
     Node process(Object? input, [int index = -1]) {
       if (input is List) {
-        return Node(input: null, children: input.map((value) {
+        return Node(isParentType: 1, input: null, children: input.map((value) {
           index++;
           return process(value, index);
         }).toList(), attributes: []);
       } else if (input is Map) {
-        return Node(input: null, children: input.entries.map((entry) {
+        return Node(isParentType: 2, input: null, children: input.entries.map((entry) {
           return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value));
         }).toList(), attributes: []);
       } else if (input is Node) {
@@ -356,5 +469,20 @@ class RootNode {
         }
       }
     }
+  }
+
+  static void assignInstance(RootNode value) {
+    instance = value;
+  }
+}
+
+class CustomNode {
+  String key;
+  String value;
+
+  CustomNode(this.key, this.value);
+
+  Uint8List toBinary() {
+    return Uint8List.fromList([...utf8.encode(key), 0x00, ...utf8.encode(value), 0x00]);
   }
 }
