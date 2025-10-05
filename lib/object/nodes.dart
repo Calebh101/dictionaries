@@ -176,14 +176,15 @@ class Node extends NodeData {
       // Then we'll include the length of the contents as an unsigned 64-bit integer.
       // Finally, we'll include the actual content.
     } else if (node is NodeKeyValuePair) {
-      List<int> bytes = [...utf8.encode("NKVP"), ...utf8.encode(node.key), 0x00, ...toBinary(node.node)];
+      List<int> bytes = [...utf8.encode(node.key), 0x00, ...toBinary(node.node)];
       ByteData length = ByteData(8);
       length.setUint64(0, bytes.length, IntParser.defaultEndian);
+      return Uint8List.fromList([...length.buffer.asUint8List(), ...utf8.encode("NKVP"), ...bytes]);
 
       // First, we'll include "NVKP" (NodeKeyValuePair) in UTF8 as the first 4 bytes.
       // Then we'll include the null-terminated key.
       // Finally we'll call [Node.toBinary] on the contents.
-      return Uint8List.fromList([...length.buffer.asUint8List(), ...bytes]);
+      // The length is calculated based on the key, null terminator, and size of the child binary alltogether.
     } else {
       throw UnimplementedError();
     }
@@ -359,69 +360,88 @@ class RootNode {
 
   static RootNode? fromBinary(Uint8List bytes) {
     try {
-      NodeData process(Uint8List bytes, int layer) {
-        String magic = ascii.decode(bytes.sublist(0, 4));
-        Logger.verbose("Found node $layer:$magic of ${bytes.length} bytes: ${bytes.map((x) => "0x${x.toRadixString(16).padLeft(2, '0').toUpperCase()}")}");
+      int i = 0;
 
-        if (magic == "NODE") {
-          Uint8List typeBytes = bytes.sublist(4, 5);
-          Logger.verbose("Found type bytes of $typeBytes");
-          NodeType type = NodeType.values[typeBytes.first];
-          Uint8List content = bytes.sublist(5);
+      NodeData process(Uint8List bytes, int layer, int start) {
+        try {
+          Logger.verbose("Processing $i:$layer of ${bytes.length} bytes...");
+          String magic = ascii.decode(bytes.sublist(0, 4));
+          Logger.verbose("Found node $i:$layer:$magic at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')}) of ${bytes.length} bytes: ${bytes.map((x) => "0x${x.toRadixString(16).padLeft(2, '0').toUpperCase()}")}");
+          i++;
 
-          switch (type) {
-            case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
-            case NodeType.data: return Node(input: content);
-            case NodeType.empty: return Node(input: null);
-            case NodeType.number: return Node(input: content.toInt64());
-            case NodeType.date:
-              int ms = content.toInt64();
-              DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
-              return Node(input: date);
-            case NodeType.string:
-              String text = ascii.decode(content);
-              return Node(input: text);
-            case NodeType.dynamic:
-              int offset = 0;
-              String key = "";
-              String value = "";
+          if (magic == "NODE") {
+            Uint8List typeBytes = bytes.sublist(4, 5);
+            Logger.verbose("Found type bytes of $typeBytes");
+            NodeType type = NodeType.values[typeBytes.first];
+            Uint8List content = bytes.sublist(5);
 
-              while (content[offset] != 0) {
-                key += ascii.decode([content[offset]]);
+            switch (type) {
+              case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
+              case NodeType.data: return Node(input: content);
+              case NodeType.empty: return Node(input: null);
+              case NodeType.number: return Node(input: content.toInt64());
+              case NodeType.date:
+                int ms = content.toInt64();
+                DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
+                return Node(input: date);
+              case NodeType.string:
+                String text = ascii.decode(content);
+                return Node(input: text);
+              case NodeType.dynamic:
+                int offset = 0;
+                String key = "";
+                String value = "";
+
+                while (content[offset] != 0) {
+                  key += ascii.decode([content[offset]]);
+                  offset++;
+                }
+
                 offset++;
-              }
 
-              offset++;
+                while (content[offset] != 0) {
+                  value += ascii.decode([content[offset]]);
+                  offset++;
+                }
 
-              while (content[offset] != 0) {
-                value += ascii.decode([content[offset]]);
-                offset++;
-              }
+                CustomNode data = CustomNode(key, value);
+                return Node(input: data);
+              case NodeType.map:
+              case NodeType.array:
+                int offset = 8;
 
-              CustomNode data = CustomNode(key, value);
-              return Node(input: data);
-            case NodeType.map:
-            case NodeType.array:
-              int length = content.sublist(0, 8).toUint64();
-              List<NodeData> children = [];
-              int offset = 8;
+                try {
+                  int length = content.sublist(0, 8).toUint64();
+                  List<NodeData> children = [];
 
-              for (int i = 0; i < length; i++) {
-                int size = content.sublist(offset, offset + 8).toUint64();
-                Logger.verbose("Found element of $size bytes");
-                Uint8List child = content.sublist(offset + 8, offset + 8 + size);
-                children.add(process(child, layer + 1));
-                offset += 8 + size;
-              }
+                  for (int i = 0; i < length; i++) {
+                    int size = content.sublist(offset, offset + 8).toUint64();
+                    if (offset + 8 + size > content.length) throw Exception("Child node length ($size) exceeds remaining content (${content.length - offset - 8}) at offset $offset (byte $offset / ${content.length})");
 
-              return Node(input: null, children: children);
+                    Uint8List child = content.sublist(offset + 8, offset + 8 + size);
+                    Logger.verbose("$i[$offset]. Found element of ${child.length} bytes (expected $size bytes)");
+
+                    children.add(process(child, layer + 1, start + offset));
+                    offset += 8 + 4 + size;
+                  }
+
+                  return Node(input: null, children: children);
+                } catch (e) {
+                  rethrow;
+                }
+            }
+          } else if (magic == "NKVP") {
+            int nullIndex = bytes.sublist(4).indexOf(0x00);
+            List<int> asciiBytes = (nullIndex != -1) ? bytes.sublist(0, nullIndex) : bytes;
+            Uint8List child = bytes.sublist(nullIndex + 1 + 8);
+            Logger.verbose("First null index is $nullIndex/${bytes.length - 4}, leaving ${child.length} bytes: ${child.format()}");
+            return NodeKeyValuePair(key: ascii.decode(asciiBytes), value: process(child, layer + 1, start + child.length) as Node);
+          } else {
+            throw Exception("Found invalid magic of ${bytes.sublist(0, 4).map((x) => "0x${x.toRadixString(16).toUpperCase().padLeft(0, '0')}")} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')})");
           }
-        } else if (magic == "NKVP") {
-          int nullIndex = bytes.sublist(4).indexOf(0);
-          List<int> asciiBytes = (nullIndex != -1) ? bytes.sublist(0, nullIndex) : bytes;
-          return NodeKeyValuePair(key: ascii.decode(asciiBytes), value: process(bytes.sublist(4 + nullIndex + 1 + 8), layer + 1) as Node);
-        } else {
-          throw UnimplementedError();
+        } catch (e) {
+          rethrow;
+          throw Exception("Exception ${e.runtimeType} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')}): $e");
         }
       }
 
@@ -439,9 +459,9 @@ class RootNode {
       for (int i = 0; i < rootLength; i++) {
         offset += 8;
         int length = content.sublist(offset - 8, offset).toUint64();
-        Logger.print("$i[$offset]. Found length of $length from $headerSize");
+        Logger.print("$i[${offset - 8}]. Found length of $length from $headerSize");
         Uint8List bytes = content.sublist(offset, offset + length);
-        children.add(process(bytes, 0));
+        children.add(process(bytes, 0, headerSize  + (offset - 8)));
         offset += length + 8;
       }
 

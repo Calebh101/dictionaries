@@ -232,3 +232,23 @@ extension IntParser on Uint8List {
     return ByteData.sublistView(this).getInt64(0, endianness);
   }
 }
+
+extension ByteFormatter on List<int> {
+  String format({String delim = ", ", int max = 10}) {
+    List<int> values = this;
+    bool moreThanMax = false;
+
+    if (values.length > max) {
+      values = values.sublist(0, max);
+      moreThanMax = true;
+    }
+
+    return [...values.map((x) => "0x${x.toRadixString(16).toUpperCase().padLeft(2, 0.toString())}"), if (moreThanMax) "..."].join(delim);
+  }
+}
+
+extension ByteFormatterSingular on int {
+  String format() {
+    return [this].format();
+  }
+}
