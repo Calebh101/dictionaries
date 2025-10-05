@@ -1,9 +1,13 @@
+import 'package:dictionaries/main.dart';
 import 'package:dictionaries/object/nodes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
+import 'package:localpkg/dialogue.dart';
 import 'package:menu_bar/menu_bar.dart';
 import 'package:styled_logger/styled_logger.dart';
 
+bool throwOnBinary = true;
+String? currentFileName;
 List<NodeData> currentExpanded = [];
 
 class ObjectEditorDesktop extends StatefulWidget {
@@ -44,7 +48,17 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
   @override
   Widget build(BuildContext context) {
     return MenuBarWidget(
-      barButtons: [],
+      barButtons: [
+        BarButton(text: Text("File"), submenu: SubMenu(menuItems: [
+          MenuButton(text: Text("Export as Dictionary"), onTap: () async {
+            String? result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary());
+            if (result == null) return;
+            List<String> text = result.split(RegExp("[\\|/]")).last.split(".");
+            currentFileName = text.sublist(0, text.length - 2).join(".");
+            SnackBarManager.show(context, "Saved file to $currentFileName!");
+          }),
+        ])),
+      ],
       child: AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
         if (entry.node.isRoot) {
           Node node = entry.node as Node;

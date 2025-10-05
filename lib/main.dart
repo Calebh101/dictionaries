@@ -2,10 +2,14 @@
 
 import 'dart:io';
 
+import 'package:dictionaries/object/editor.dart';
 import 'package:dictionaries/object/main.dart';
 import 'package:dictionaries/object/nodes.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_environments_plus/flutter_environments_plus.dart';
 import 'package:localpkg/dialogue.dart';
 import 'package:localpkg/functions.dart';
 import 'package:styled_logger/styled_logger.dart';
@@ -14,6 +18,7 @@ final Version version = Version.parse("0.0.0A");
 
 void main() {
   if (kDebugMode) Logger.enable();
+  if (kDebugMode) Logger.setVerbose(true);
   runApp(const MainApp());
 }
 
@@ -64,7 +69,7 @@ class _HomeState extends State<Home> {
     });
   }
 
-  bool activateEditor(String raw) {
+  bool activateEditor(Uint8List raw) {
     Widget? widget = decideEditor(raw);
     if (widget == null) return SnackBarManager.show(context, "Invalid file type.").thenReturn(false);
     SimpleNavigator.navigate(context: context, page: EditorMainPage(child: widget), mode: NavigatorMode.pushReplacement);
@@ -80,7 +85,7 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) {
     List<HomeOption> children = [
       HomeOption("New", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
-        activateEditor(File("/home/caleb/Downloads/config2a.plist").readAsStringSync());
+        activateEditor(File("/home/caleb/Downloads/${throwOnBinary ? "MyDictionary.dictionary" : "config2a.plist"}").readAsBytesSync());
       }),
       HomeOption("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, onActivate: () async {}),
       HomeOption("Download", description: "Download an existing dictionary.", icon: Icons.download, child: flagSet(download_loading) ? CircularProgressIndicator() : null, onActivate: () async {
@@ -144,97 +149,86 @@ class _EditorMainPageState extends State<EditorMainPage> {
   }
 }
 
-Widget? decideEditor(String raw) {
+Widget? decideEditor(Uint8List raw) {
   return ObjectEditorPage(root: RootNode.tryParse(raw)!);
 }
 
-const Map testJson = {
-  "test1": {
-    "test2": [
-      "test3",
-      4,
-      {
-        "test5": "test6",
-        "deep1": {
-          "deep2": [
-            {
-              "deep3": {
-                "deep4": [
-                  {
-                    "deep5": [
-                      {
-                        "deep6": {
-                          "deep7": [
-                            {
-                              "deep8": {
-                                "deep9": [
-                                  {
-                                    "deep10": {
-                                      "deep11": [
-                                        {
-                                          "deep12": {
-                                            "deep13": [
-                                              {
-                                                "deep14": [
-                                                  {
-                                                    "deep15": "you are lost",
-                                                    "deep16": "you will never find a way out",
-                                                  }
-                                                ]
-                                              }
-                                            ]
-                                          }
-                                        }
-                                      ]
-                                    }
-                                  }
-                                ]
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      [
-        "test7",
-        8,
-        true,
-        [
-          "level2",
-          [
-            "level3",
-            [
-              "level4",
-              [
-                "level5",
-                [
-                  "level6",
-                  ["level7", ["level8", ["level9", ["level10"]]]]
-                ]
-              ]
-            ]
-          ]
-        ]
-      ]
-    ],
-    "test8": {
-      "test9": 10,
-      "test11": false,
-      "testDeep": {
-        "anotherLayer": {
-          "yetAnother": {
-            "finalLayer": ["almostThere", {"key": "value"}]
-          }
-        }
-      }
-    },
-  },
-  "test12": "test13",
-};
+Future<String?> saveFile({
+  required String name,
+  required Uint8List bytes,
+  String extension = "dictionary",
+  String mime = "application/xc-dictionary",
+}) async {
+  if (Environment.isWeb) {
+    return await FileSaver.instance.saveFile(
+      name: name,
+      fileExtension: extension,
+      mimeType: MimeType.custom,
+      customMimeType: mime,
+      bytes: bytes,
+    );
+  } else if (Environment.isDesktop) {
+    String? result = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save Dictionary As...',
+      fileName: [name, extension].join("."),
+    );
+
+    if (result != null) {
+      File file = File(result);
+      await file.writeAsBytes(bytes);
+      return result;
+    } else {
+      return null;
+    }
+  } else {
+    throw UnimplementedError();
+  }
+}
+
+extension IntParser on Uint8List {
+  static const Endian defaultEndian = Endian.little;
+
+  int toUint8() {
+    return ByteData.sublistView(this).getUint8(0);
+  }
+
+  int toUint16([Endian endianness = defaultEndian]) {
+    return ByteData.sublistView(this).getUint16(0, endianness);
+  }
+
+  int toUint24([Endian endianness = defaultEndian]) {
+    if (length < 3) {
+      throw RangeError("Need at least 3 bytes for Uint24");
+    }
+
+    if (endianness == defaultEndian) {
+      return (this[0] << 16) | (this[1] << 8) | this[2];
+    } else {
+      return (this[2] << 16) | (this[1] << 8) | this[0];
+    }
+  }
+
+  int toUint32([Endian endianness = defaultEndian]) {
+    return ByteData.sublistView(this).getUint32(0, endianness);
+  }
+
+  int toUint64([Endian endianness = defaultEndian]) {
+    return ByteData.sublistView(this).getUint64(0, endianness);
+  }
+
+  int toInt8() {
+    return ByteData.sublistView(this).getInt8(0);
+  }
+
+  int toInt16([Endian endianness = defaultEndian]) {
+    return ByteData.sublistView(this).getInt16(0, endianness);
+  }
+
+  int toInt32([Endian endianness = defaultEndian]) {
+    return ByteData.sublistView(this).getInt32(0, endianness);
+  }
+
+  int toInt64([Endian endianness = defaultEndian]) {
+    return ByteData.sublistView(this).getInt64(0, endianness);
+  }
+}

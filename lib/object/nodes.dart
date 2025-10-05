@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dictionaries/main.dart';
+import 'package:dictionaries/object/editor.dart';
 import 'package:intl/intl.dart';
 import 'package:json2yaml/json2yaml.dart';
+import 'package:localpkg/functions.dart';
 import 'package:plist_parser/plist_parser.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:uuid/uuid.dart';
@@ -135,24 +138,24 @@ class Node extends NodeData {
 
       List<int> process() {
         switch (node.type) {
-          case NodeType.string: return [...utf8.encode(node.input as String), 0x00];
+          case NodeType.string: return utf8.encode(node.input as String);
           case NodeType.number:
             ByteData data = ByteData(8);
-            if (node.input is int) data.setInt64(0, node.input as int);
-            if (node.input is double) data.setFloat64(0, node.input as double);
+            if (node.input is int) data.setInt64(0, node.input as int, IntParser.defaultEndian);
+            if (node.input is double) data.setFloat64(0, node.input as double, IntParser.defaultEndian);
             return data.buffer.asUint8List();
           case NodeType.empty: return [];
           case NodeType.data: return node.input as Uint8List;
           case NodeType.date:
             ByteData data = ByteData(8);
-            data.setInt64(0, (node.input as DateTime).millisecondsSinceEpoch);
+            data.setInt64(0, (node.input as DateTime).millisecondsSinceEpoch, IntParser.defaultEndian);
             return data.buffer.asUint8List();
           case NodeType.boolean: return [(node.input as bool) ? 1 : 0];
           case NodeType.map:
           case NodeType.array:
-            ByteData length = ByteData(4);
-            length.setInt32(0, node.children.length);
+            ByteData length = ByteData(8)..setUint64(0, node.children.length, IntParser.defaultEndian);
             List<int> bytes = [];
+
             for (Uint8List child in node.children.map((x) => toBinary(x))) bytes.addAll(child);
             return [...length.buffer.asUint8List(), ...bytes];
 
@@ -165,18 +168,22 @@ class Node extends NodeData {
 
       List<int> bytes = process();
       ByteData length = ByteData(8);
-      length.setUint64(0, bytes.length);
-      return Uint8List.fromList([...utf8.encode("NODE"), type & 0xFF, ...length.buffer.asUint8List(), ...bytes]);
+      length.setUint64(0, bytes.length, IntParser.defaultEndian);
+      return Uint8List.fromList([...length.buffer.asUint8List(), ...utf8.encode("NODE"), type, ...bytes]);
 
       // First, we'll include "NODE" in UTF8 as the first 4 bytes.
       // Second, we'll include the type as a single-byte integer.
       // Then we'll include the length of the contents as an unsigned 64-bit integer.
       // Finally, we'll include the actual content.
     } else if (node is NodeKeyValuePair) {
+      List<int> bytes = [...utf8.encode("NKVP"), ...utf8.encode(node.key), 0x00, ...toBinary(node.node)];
+      ByteData length = ByteData(8);
+      length.setUint64(0, bytes.length, IntParser.defaultEndian);
+
       // First, we'll include "NVKP" (NodeKeyValuePair) in UTF8 as the first 4 bytes.
       // Then we'll include the null-terminated key.
       // Finally we'll call [Node.toBinary] on the contents.
-      return Uint8List.fromList([...utf8.encode("NKVP"), ...utf8.encode(node.key), 0x00, ...toBinary(node.node)]);
+      return Uint8List.fromList([...length.buffer.asUint8List(), ...bytes]);
     } else {
       throw UnimplementedError();
     }
@@ -330,19 +337,120 @@ class RootNode {
   }
 
   Uint8List toBinary() {
-    ByteData length = ByteData(8)..setUint64(0, children.length);
-    int headerSize = 64;
-    ByteData headerSizeData = ByteData(2)..setUint16(0, headerSize);
+    ByteData length = ByteData(8)..setUint64(0, children.length, IntParser.defaultEndian);
+    int headerSize = 128;
+    ByteData headerSizeData = ByteData(2)..setUint16(0, headerSize, IntParser.defaultEndian);
+    Uint8List headerSizeBytes = headerSizeData.buffer.asUint8List();
 
-    List<int> header = [...utf8.encode("DICTIONARY" /* 10 chars */), ...headerSizeData.buffer.asUint8List()];
+    Logger.print("Writing header... (headerSizeBytes: ${headerSizeBytes.map((x) => "0x${x.toRadixString(16).padLeft(2, "0")}")})");
+    List<int> header = [...utf8.encode("DICTIONARY"), ...headerSizeBytes, ...version.toBinary()];
     if (header.length < headerSize) header.addAll(List.filled(headerSize - header.length, 0x00));
 
     List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => Node.toBinary(x))];
-    return Uint8List.fromList([...header, ...body]);
+    return Uint8List.fromList([...header, ...body, ...utf8.encode("CALEBH101")]);
 
     // The first 10 bytes are the UTF8 of "DICTIONARY".
+    // The application version is then included. This is exactly 10 bytes.
     // The header offset is then included as an unsigned 16-bit integer.
+    // The header is then padded.
     // The body is first an unsigned 64-bit integer with the length of the children, followed by the children contents. This is continued in [Node.toBinary].
+    // Finally, we add a small watermark :)
+  }
+
+  static RootNode? fromBinary(Uint8List bytes) {
+    try {
+      NodeData process(Uint8List bytes, int layer) {
+        String magic = ascii.decode(bytes.sublist(0, 4));
+        Logger.verbose("Found node $layer:$magic of ${bytes.length} bytes: ${bytes.map((x) => "0x${x.toRadixString(16).padLeft(2, '0').toUpperCase()}")}");
+
+        if (magic == "NODE") {
+          Uint8List typeBytes = bytes.sublist(4, 5);
+          Logger.verbose("Found type bytes of $typeBytes");
+          NodeType type = NodeType.values[typeBytes.first];
+          Uint8List content = bytes.sublist(5);
+
+          switch (type) {
+            case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
+            case NodeType.data: return Node(input: content);
+            case NodeType.empty: return Node(input: null);
+            case NodeType.number: return Node(input: content.toInt64());
+            case NodeType.date:
+              int ms = content.toInt64();
+              DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
+              return Node(input: date);
+            case NodeType.string:
+              String text = ascii.decode(content);
+              return Node(input: text);
+            case NodeType.dynamic:
+              int offset = 0;
+              String key = "";
+              String value = "";
+
+              while (content[offset] != 0) {
+                key += ascii.decode([content[offset]]);
+                offset++;
+              }
+
+              offset++;
+
+              while (content[offset] != 0) {
+                value += ascii.decode([content[offset]]);
+                offset++;
+              }
+
+              CustomNode data = CustomNode(key, value);
+              return Node(input: data);
+            case NodeType.map:
+            case NodeType.array:
+              int length = content.sublist(0, 8).toUint64();
+              List<NodeData> children = [];
+              int offset = 8;
+
+              for (int i = 0; i < length; i++) {
+                int size = content.sublist(offset, offset + 8).toUint64();
+                Logger.verbose("Found element of $size bytes");
+                Uint8List child = content.sublist(offset + 8, offset + 8 + size);
+                children.add(process(child, layer + 1));
+                offset += 8 + size;
+              }
+
+              return Node(input: null, children: children);
+          }
+        } else if (magic == "NKVP") {
+          int nullIndex = bytes.sublist(4).indexOf(0);
+          List<int> asciiBytes = (nullIndex != -1) ? bytes.sublist(0, nullIndex) : bytes;
+          return NodeKeyValuePair(key: ascii.decode(asciiBytes), value: process(bytes.sublist(4 + nullIndex + 1 + 8), layer + 1) as Node);
+        } else {
+          throw UnimplementedError();
+        }
+      }
+
+      if (ascii.decode(bytes.sublist(0, 10)) != "DICTIONARY") throw Exception("Invalid magic.");
+      int headerSize = bytes.sublist(10, 12).toUint16();
+      Version fileVersion = Version.parseBinary(bytes.sublist(12, 22));
+      Logger.print("Found file details: headerSize=$headerSize version=$fileVersion");
+
+      Uint8List content = bytes.sublist(headerSize);
+      int offset = 8;
+      int rootLength = content.sublist(0, offset).toUint64();
+      Logger.print("Found $rootLength children of ${content.length} bytes");
+      List<NodeData> children = [];
+
+      for (int i = 0; i < rootLength; i++) {
+        offset += 8;
+        int length = content.sublist(offset - 8, offset).toUint64();
+        Logger.print("$i[$offset]. Found length of $length from $headerSize");
+        Uint8List bytes = content.sublist(offset, offset + length);
+        children.add(process(bytes, 0));
+        offset += length + 8;
+      }
+
+      return RootNode(children: children, type: children.every((x) => x is Node) ? RootNodeType.array : (children.every((x) => x is NodeKeyValuePair) ? RootNodeType.map : throw UnimplementedError("Inconsistent children")));
+    } catch (e) {
+      if (throwOnBinary) rethrow;
+      Logger.warn("Unable to parse RootNode from binary: $e");
+      return null;
+    }
   }
 
   static XmlDocument _toPlist(Object? input, {bool showNull = false}) {
@@ -451,18 +559,21 @@ class RootNode {
     throw UnimplementedError();
   }
 
-  static RootNode? tryParse(String raw) {
+  static RootNode? tryParse(Uint8List raw) {
+    RootNode? fromBinary = RootNode.fromBinary(raw);
+    if (fromBinary != null) return fromBinary;
+
     try {
       Logger.print("Trying JSON...");
-      return RootNode.fromJson(raw);
+      return RootNode.fromJson(ascii.decode(raw));
     } catch (a) {
       try {
         Logger.print("Trying YAML...");
-        return RootNode.fromYaml(raw);
+        return RootNode.fromYaml(ascii.decode(raw));
       } catch (b) {
         try {
           Logger.print("Trying PList...");
-          return RootNode.fromPlist(raw);
+          return RootNode.fromPlist(ascii.decode(raw));
         } catch (c) {
           Logger.warn("Unable to parse input: ${[a, b, c].join(", ")}");
           return null;
