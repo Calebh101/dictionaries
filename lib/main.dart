@@ -10,6 +10,7 @@ import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_environments_plus/flutter_environments_plus.dart';
+import 'package:localpkg/classes.dart';
 import 'package:localpkg/dialogue.dart';
 import 'package:localpkg/functions.dart';
 import 'package:styled_logger/styled_logger.dart';
@@ -157,7 +158,7 @@ Future<String?> saveFile({
   required String name,
   required Uint8List bytes,
   String extension = "dictionary",
-  String mime = "application/xc-dictionary",
+  String mime = "application/xc-dict",
 }) async {
   if (Environment.isWeb) {
     return await FileSaver.instance.saveFile(
@@ -182,73 +183,5 @@ Future<String?> saveFile({
     }
   } else {
     throw UnimplementedError();
-  }
-}
-
-extension IntParser on Uint8List {
-  static const Endian defaultEndian = Endian.little;
-
-  int toUint8() {
-    return ByteData.sublistView(this).getUint8(0);
-  }
-
-  int toUint16([Endian endianness = defaultEndian]) {
-    return ByteData.sublistView(this).getUint16(0, endianness);
-  }
-
-  int toUint24([Endian endianness = defaultEndian]) {
-    if (length < 3) {
-      throw RangeError("Need at least 3 bytes for Uint24");
-    }
-
-    if (endianness == defaultEndian) {
-      return (this[0] << 16) | (this[1] << 8) | this[2];
-    } else {
-      return (this[2] << 16) | (this[1] << 8) | this[0];
-    }
-  }
-
-  int toUint32([Endian endianness = defaultEndian]) {
-    return ByteData.sublistView(this).getUint32(0, endianness);
-  }
-
-  int toUint64([Endian endianness = defaultEndian]) {
-    return ByteData.sublistView(this).getUint64(0, endianness);
-  }
-
-  int toInt8() {
-    return ByteData.sublistView(this).getInt8(0);
-  }
-
-  int toInt16([Endian endianness = defaultEndian]) {
-    return ByteData.sublistView(this).getInt16(0, endianness);
-  }
-
-  int toInt32([Endian endianness = defaultEndian]) {
-    return ByteData.sublistView(this).getInt32(0, endianness);
-  }
-
-  int toInt64([Endian endianness = defaultEndian]) {
-    return ByteData.sublistView(this).getInt64(0, endianness);
-  }
-}
-
-extension ByteFormatter on List<int> {
-  String format({String delim = ", ", int max = 10}) {
-    List<int> values = this;
-    bool moreThanMax = false;
-
-    if (values.length > max) {
-      values = values.sublist(0, max);
-      moreThanMax = true;
-    }
-
-    return [...values.map((x) => "0x${x.toRadixString(16).toUpperCase().padLeft(2, 0.toString())}"), if (moreThanMax) "..."].join(delim);
-  }
-}
-
-extension ByteFormatterSingular on int {
-  String format() {
-    return [this].format();
   }
 }

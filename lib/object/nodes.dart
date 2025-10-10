@@ -5,6 +5,7 @@ import 'package:dictionaries/main.dart';
 import 'package:dictionaries/object/editor.dart';
 import 'package:intl/intl.dart';
 import 'package:json2yaml/json2yaml.dart';
+import 'package:localpkg/classes.dart';
 import 'package:localpkg/functions.dart';
 import 'package:plist_parser/plist_parser.dart';
 import 'package:styled_logger/styled_logger.dart';
@@ -303,7 +304,9 @@ class RootNode {
     rebuild();
   }
 
+  static const String fileMagic = "XC-DICT";
   static late RootNode instance;
+  static int _nodes = 0;
 
   void rebuild() {
     _buildRootLookup();
@@ -344,13 +347,16 @@ class RootNode {
     Uint8List headerSizeBytes = headerSizeData.buffer.asUint8List();
 
     Logger.print("Writing header... (headerSizeBytes: ${headerSizeBytes.map((x) => "0x${x.toRadixString(16).padLeft(2, "0")}")})");
-    List<int> header = [...utf8.encode("DICTIONARY"), ...headerSizeBytes, ...version.toBinary()];
+    List<int> magic = utf8.encode(fileMagic);
+    if (magic.length < 10) magic = [...magic, ...List.filled(10 - magic.length, 0x00)];
+
+    List<int> header = [...utf8.encode(fileMagic), ...headerSizeBytes, ...version.toBinary()];
     if (header.length < headerSize) header.addAll(List.filled(headerSize - header.length, 0x00));
 
     List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => Node.toBinary(x))];
     return Uint8List.fromList([...header, ...body, ...utf8.encode("CALEBH101")]);
 
-    // The first 10 bytes are the UTF8 of "DICTIONARY".
+    // The first 10 bytes are the UTF8 of the file magic.
     // The application version is then included. This is exactly 10 bytes.
     // The header offset is then included as an unsigned 16-bit integer.
     // The header is then padded.
@@ -358,114 +364,102 @@ class RootNode {
     // Finally, we add a small watermark :)
   }
 
+  static List<NodeData> _handleChildren(Uint8List bytes, int layer, int start) {
+    int offset = 0;
+    List<NodeData> children = [];
+    Logger.verbose("Handling children at offset $offset (${offset.formatByte()})...");
+
+    while (offset < bytes.length) {
+      List<int> header = bytes.sublist(offset, offset + 12);
+      int length = header.sublist(0, 8).toUint64();
+      String magic = utf8.decode(header.sublist(8, 12));
+
+      Logger.verbose("Found child $magic of $length bytes at offset $offset (${start + offset})");
+
+      offset += 12;
+      children.add(_process(bytes.sublist(offset, offset + length), magic, layer + 1, start + offset + length));
+      offset += length;
+    }
+
+    return children;
+  }
+
+  static NodeData _process(Uint8List bytes, String magic, int layer, int start) {
+    try {
+      Logger.verbose("Found node $_nodes:$layer:$magic at offset $start (0x${start.formatByte()}) of ${bytes.length} bytes: ${bytes.formatBytes(max: 30)}");
+      _nodes++;
+
+      if (magic == "NODE") {
+        Uint8List typeBytes = bytes.sublist(4, 5);
+        Logger.verbose("Found type bytes of $typeBytes");
+        NodeType type = NodeType.values[typeBytes.first];
+        Uint8List content = bytes.sublist(5);
+
+        switch (type) {
+          case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
+          case NodeType.data: return Node(input: content);
+          case NodeType.empty: return Node(input: null);
+          case NodeType.number: return Node(input: content.toInt64());
+          case NodeType.date:
+            int ms = content.toInt64();
+            DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
+            return Node(input: date);
+          case NodeType.string:
+            String text = utf8.decode(content);
+            return Node(input: text);
+          case NodeType.dynamic:
+            int offset = 0;
+            String key = "";
+            String value = "";
+
+            while (content[offset] != 0) {
+              key += utf8.decode([content[offset]]);
+              offset++;
+            }
+
+            offset++;
+
+            while (content[offset] != 0) {
+              value += utf8.decode([content[offset]]);
+              offset++;
+            }
+
+            CustomNode data = CustomNode(key, value);
+            return Node(input: data);
+          case NodeType.map:
+          case NodeType.array:
+            return Node(input: _handleChildren(content, layer + 1, start + 5));
+        }
+      } else if (magic == "NKVP") {
+        int nullIndex = bytes.indexOf(0x00);
+        List<int> utf8Bytes = (nullIndex != -1) ? bytes.sublist(0, nullIndex) : bytes;
+        Uint8List child = bytes.sublist(nullIndex + 1);
+        String magic = utf8.decode(child.sublist(8, 12));
+        Logger.verbose("Child=$magic, first null index is $nullIndex/${bytes.length}, leaving ${child.length} bytes: ${child.formatBytes()}");
+        return NodeKeyValuePair(key: utf8.decode(utf8Bytes), value: _process(child.sublist(12), magic, layer + 1, start + child.length) as Node);
+      } else {
+        throw Exception("Found invalid magic of ${bytes.sublist(0, 4).map((x) => "0x${x.toRadixString(16).toUpperCase().padLeft(0, '0')}")} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')})");
+      }
+    } catch (e) {
+      if (throwOnBinary) rethrow;
+      throw Exception("Exception ${e.runtimeType} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')}): $e");
+    }
+  }
+
   static RootNode? fromBinary(Uint8List bytes) {
     try {
-      int i = 0;
+      if (utf8.decode(bytes.sublist(0, fileMagic.length)) != fileMagic) throw Exception("Invalid magic.");
+      _nodes = 0;
 
-      NodeData process(Uint8List bytes, int layer, int start) {
-        try {
-          Logger.verbose("Processing $i:$layer of ${bytes.length} bytes...");
-          String magic = ascii.decode(bytes.sublist(0, 4));
-          Logger.verbose("Found node $i:$layer:$magic at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')}) of ${bytes.length} bytes: ${bytes.map((x) => "0x${x.toRadixString(16).padLeft(2, '0').toUpperCase()}")}");
-          i++;
-
-          if (magic == "NODE") {
-            Uint8List typeBytes = bytes.sublist(4, 5);
-            Logger.verbose("Found type bytes of $typeBytes");
-            NodeType type = NodeType.values[typeBytes.first];
-            Uint8List content = bytes.sublist(5);
-
-            switch (type) {
-              case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
-              case NodeType.data: return Node(input: content);
-              case NodeType.empty: return Node(input: null);
-              case NodeType.number: return Node(input: content.toInt64());
-              case NodeType.date:
-                int ms = content.toInt64();
-                DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
-                return Node(input: date);
-              case NodeType.string:
-                String text = ascii.decode(content);
-                return Node(input: text);
-              case NodeType.dynamic:
-                int offset = 0;
-                String key = "";
-                String value = "";
-
-                while (content[offset] != 0) {
-                  key += ascii.decode([content[offset]]);
-                  offset++;
-                }
-
-                offset++;
-
-                while (content[offset] != 0) {
-                  value += ascii.decode([content[offset]]);
-                  offset++;
-                }
-
-                CustomNode data = CustomNode(key, value);
-                return Node(input: data);
-              case NodeType.map:
-              case NodeType.array:
-                int offset = 8;
-
-                try {
-                  int length = content.sublist(0, 8).toUint64();
-                  List<NodeData> children = [];
-
-                  for (int i = 0; i < length; i++) {
-                    int size = content.sublist(offset, offset + 8).toUint64();
-                    if (offset + 8 + size > content.length) throw Exception("Child node length ($size) exceeds remaining content (${content.length - offset - 8}) at offset $offset (byte $offset / ${content.length})");
-
-                    Uint8List child = content.sublist(offset + 8, offset + 8 + size);
-                    Logger.verbose("$i[$offset]. Found element of ${child.length} bytes (expected $size bytes)");
-
-                    children.add(process(child, layer + 1, start + offset));
-                    offset += 8 + 4 + size;
-                  }
-
-                  return Node(input: null, children: children);
-                } catch (e) {
-                  rethrow;
-                }
-            }
-          } else if (magic == "NKVP") {
-            int nullIndex = bytes.sublist(4).indexOf(0x00);
-            List<int> asciiBytes = (nullIndex != -1) ? bytes.sublist(0, nullIndex) : bytes;
-            Uint8List child = bytes.sublist(nullIndex + 1 + 8);
-            Logger.verbose("First null index is $nullIndex/${bytes.length - 4}, leaving ${child.length} bytes: ${child.format()}");
-            return NodeKeyValuePair(key: ascii.decode(asciiBytes), value: process(child, layer + 1, start + child.length) as Node);
-          } else {
-            throw Exception("Found invalid magic of ${bytes.sublist(0, 4).map((x) => "0x${x.toRadixString(16).toUpperCase().padLeft(0, '0')}")} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')})");
-          }
-        } catch (e) {
-          rethrow;
-          throw Exception("Exception ${e.runtimeType} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')}): $e");
-        }
-      }
-
-      if (ascii.decode(bytes.sublist(0, 10)) != "DICTIONARY") throw Exception("Invalid magic.");
       int headerSize = bytes.sublist(10, 12).toUint16();
       Version fileVersion = Version.parseBinary(bytes.sublist(12, 22));
       Logger.print("Found file details: headerSize=$headerSize version=$fileVersion");
 
       Uint8List content = bytes.sublist(headerSize);
-      int offset = 8;
-      int rootLength = content.sublist(0, offset).toUint64();
+      int rootLength = content.sublist(0, 8).toUint64();
       Logger.print("Found $rootLength children of ${content.length} bytes");
-      List<NodeData> children = [];
-
-      for (int i = 0; i < rootLength; i++) {
-        offset += 8;
-        int length = content.sublist(offset - 8, offset).toUint64();
-        Logger.print("$i[${offset - 8}]. Found length of $length from $headerSize");
-        Uint8List bytes = content.sublist(offset, offset + length);
-        children.add(process(bytes, 0, headerSize  + (offset - 8)));
-        offset += length + 8;
-      }
-
-      return RootNode(children: children, type: children.every((x) => x is Node) ? RootNodeType.array : (children.every((x) => x is NodeKeyValuePair) ? RootNodeType.map : throw UnimplementedError("Inconsistent children")));
+      List<NodeData> children = _handleChildren(content.sublist(8), 0, headerSize + 8);
+      return RootNode(children: children, type: children.every((x) => x is Node) ? RootNodeType.array : (children.every((x) => x is NodeKeyValuePair) ? RootNodeType.map : throw Exception("Inconsistent children")));
     } catch (e) {
       if (throwOnBinary) rethrow;
       Logger.warn("Unable to parse RootNode from binary: $e");
@@ -585,15 +579,15 @@ class RootNode {
 
     try {
       Logger.print("Trying JSON...");
-      return RootNode.fromJson(ascii.decode(raw));
+      return RootNode.fromJson(utf8.decode(raw));
     } catch (a) {
       try {
         Logger.print("Trying YAML...");
-        return RootNode.fromYaml(ascii.decode(raw));
+        return RootNode.fromYaml(utf8.decode(raw));
       } catch (b) {
         try {
           Logger.print("Trying PList...");
-          return RootNode.fromPlist(ascii.decode(raw));
+          return RootNode.fromPlist(utf8.decode(raw));
         } catch (c) {
           Logger.warn("Unable to parse input: ${[a, b, c].join(", ")}");
           return null;
