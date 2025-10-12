@@ -822,7 +822,15 @@ class _ReorderableTabBarState extends State<ReorderableTabBar> {
       unselectedLabelColor: widget.unselectedLabelColor,
       labelStyle: widget.labelStyle,
       unselectedLabelStyle: widget.unselectedLabelStyle,
-      child: child,
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected
+              ? (widget.tabBackgroundColor ?? (Theme.of(context).brightness == Brightness.light ? Colors.grey : const Color.fromARGB(255, 57, 77, 91))).withOpacity(0.4)
+              : widget.tabBackgroundColor ?? Colors.transparent,
+          borderRadius: widget.tabBorderRadius,
+        ),
+        child: child,
+      ),
     );
   }
 

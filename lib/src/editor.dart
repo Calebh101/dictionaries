@@ -1,5 +1,6 @@
 import 'package:dictionaries/main.dart';
-import 'package:dictionaries/object/nodes.dart';
+import 'package:dictionaries/src/nodeenums.dart';
+import 'package:dictionaries/src/nodes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:localpkg/dialogue.dart';

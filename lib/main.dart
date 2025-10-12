@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dictionaries/object/main.dart';
-import 'package:dictionaries/object/nodes.dart';
+import 'package:dictionaries/src/main.dart';
+import 'package:dictionaries/src/nodes.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart';
@@ -14,6 +14,7 @@ import 'package:localpkg/functions.dart';
 import 'package:styled_logger/styled_logger.dart';
 
 final Version version = Version.parse("0.0.0A");
+final Version binaryVersion = Version.parse("1.0.0A");
 
 void main() {
   if (kDebugMode) Logger.enable();

@@ -3,7 +3,8 @@ import 'dart:typed_data';
 
 import 'package:bson/bson.dart';
 import 'package:dictionaries/main.dart';
-import 'package:dictionaries/object/editor.dart';
+import 'package:dictionaries/src/editor.dart';
+import 'package:dictionaries/src/nodeenums.dart';
 import 'package:intl/intl.dart';
 import 'package:json2yaml/json2yaml.dart';
 import 'package:localpkg/classes.dart';
@@ -13,23 +14,6 @@ import 'package:styled_logger/styled_logger.dart';
 import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
 import 'package:yaml/yaml.dart';
-
-enum NodeType {
-  string,
-  number, // int or double
-  boolean,
-  empty,
-  array,
-  map,
-  date,
-  data,
-  dynamic,
-}
-
-enum RootNodeType {
-  array,
-  map,
-}
 
 enum NodeConversionMode {
   json,
@@ -286,22 +270,24 @@ class RootNode {
     List<int> magic = utf8.encode(fileMagic);
     if (magic.length < 10) magic = [...magic, ...List.filled(10 - magic.length, 0x00)];
 
-    List<int> header = [...magic, ...headerSizeBytes, ...version.toBinary(), ...utf8.encode("Calebh101")];
+    List<int> header = [...magic, ...headerSizeBytes, ...binaryVersion.toBinary()];
     if (header.length < headerSize) header.addAll(List.filled(headerSize - header.length, 0x00));
 
-    List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => NodeBinaryManager.nodeDataToBinary(x))];
+    List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => NodeBinaryManager.nodeDataToBinary(x)), ...utf8.encode("Calebh101").padLeft(16, 0x00)];
     return Uint8List.fromList([...header, ...body]);
 
     // The first 10 bytes are the UTF8 of the file magic.
-    // The application version is then included. This is exactly 10 bytes.
+    // The binary version is then included. This is exactly 10 bytes.
     // The header offset is then included as an unsigned 16-bit integer.
     // We then add a watermark :)
     // The header is then padded.
     // The body is first an unsigned 64-bit integer with the length of the children, followed by the children contents. This is continued in [NodeBinaryManager.nodeDataToBinary].
+    // I then add a 16 byte watermark :)
   }
 
   static RootNode? fromBinary(Uint8List bytes) {
     try {
+      bytes = bytes.sublist(0, bytes.length - 16); // Get rid of the watermark we added
       if (utf8.decode(bytes.sublist(0, fileMagic.length)) != fileMagic) throw Exception("Invalid magic.");
       nodes = 0;
 
@@ -474,9 +460,9 @@ class NodeBinaryManager {
     RootNode.nodes = 0;
   }
 
-  static int getSignature(int method, [NodeType? type]) {
-    // Generate 1 byte that contains the "method" and the optional node type (if it's a standard [Node]).
-    return ((method & 0x07) << 5) | ((type?.index ?? 0) & 0x1F);
+  static int getSignature(int varient, [NodeType? type]) {
+    // Generate 1 byte that contains the varient and the optional node type (if it's a standard [Node]).
+    return ((varient & 0x07) << 5) | ((type?.index ?? 0) & 0x1F);
   }
 
   static List<int> nodeDataToBinary(NodeData node) {
@@ -504,7 +490,7 @@ class NodeBinaryManager {
         ByteData data = ByteData(8);
         if (node.input is int) data.setInt64(0, node.input as int, IntParser.defaultEndian);
         if (node.input is double) data.setFloat64(0, node.input as double, IntParser.defaultEndian);
-        return data.buffer.asUint8List();
+        return [node.input is double ? 1 : 0, ...data.buffer.asUint8List()];
       case NodeType.empty: return [];
       case NodeType.data: return node.input as Uint8List;
       case NodeType.date:
@@ -532,7 +518,7 @@ class NodeBinaryManager {
       case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
       case NodeType.data: return Node(input: content);
       case NodeType.empty: return Node(input: null);
-      case NodeType.number: return Node(input: content.toInt64());
+      case NodeType.number: return Node(input: content.first == 0 ? content.sublist(1).toInt64() : content.sublist(1).toFloat64());
       case NodeType.date:
         int ms = content.toInt64();
         DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
@@ -583,15 +569,15 @@ class NodeBinaryManager {
 
   static NodeData nodeDataFromBinary(Uint8List bytes) {
     int signature = bytes.first;
-    int method = (signature >> 5) & 0x07;
+    int varient = (signature >> 5) & 0x07;
     Uint8List content = bytes.sublist(1);
 
     RootNode.nodes++; // A record for debugging
     Logger.verbose("${RootNode.nodes}. Found node of signature ${signature.formatByte()}");
 
-    // [method] is an unsigned 3-bit integer that represents the "method" (for lack of better words) of node we're dealing with. This can be either a [Node] or a [NodeKeyValuePair]. However, if I decide to add more node types in the future, we have 7 integers that can be represented with this.
+    // [varient] is an unsigned 3-bit integer that represents the varient of node we're dealing with. This can be either a [Node] or a [NodeKeyValuePair]. However, if I decide to add more node types in the future, we have 7 integers that can be represented with this.
 
-    if (method == 0) { // [Node]
+    if (varient == 0) { // [Node]
       int typeInt = signature & 0x1F;
       NodeType type = NodeType.values[typeInt];
       Node child = nodeFromBinary(type, content);
@@ -601,15 +587,15 @@ class NodeBinaryManager {
 
       // [typeInt] is an unsigned 5-bit integer representing the type of node. This gives us 31 values, which is plenty.
       // We then use the rest of the content to parse the child.
-    } else if (method == 1) { // [NodeKeyValuePair]
+    } else if (varient == 1) { // [NodeKeyValuePair]
       Logger.verbose("${RootNode.nodes}. Found NKVP data (signature of ${signature.formatByte()})");
       return nkvpFromBinary(content);
 
-      // Not much to do here, as the [nkvpFromBinary] function handles this for us, and we've already done the method parsing above.
+      // Not much to do here, as the [nkvpFromBinary] function handles this for us, and we've already done the varient parsing above.
       // Note that the type byte's upper 5 bits are unused here; I wonder if there's a future use for them though...
     } else {
       // An alien node type has approached us, shoot it with an error
-      throw UnimplementedError("Unrecognized node method at node ${RootNode.nodes}: $method");
+      throw UnimplementedError("Unrecognized node varient at node ${RootNode.nodes}: $varient");
     }
   }
 

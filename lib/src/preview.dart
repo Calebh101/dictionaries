@@ -1,5 +1,5 @@
-import 'package:dictionaries/object/main.dart';
-import 'package:dictionaries/object/nodes.dart';
+import 'package:dictionaries/src/main.dart';
+import 'package:dictionaries/src/nodes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dictionaries/lib/flutter_highlight.dart';

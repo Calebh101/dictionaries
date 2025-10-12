@@ -1,6 +1,6 @@
-import 'package:dictionaries/object/editor.dart';
-import 'package:dictionaries/object/nodes.dart';
-import 'package:dictionaries/object/preview.dart';
+import 'package:dictionaries/src/editor.dart';
+import 'package:dictionaries/src/nodes.dart';
+import 'package:dictionaries/src/preview.dart';
 import 'package:flutter/material.dart';
 import 'package:dictionaries/lib/reorderable_tabbar.dart';
 import 'package:styled_logger/styled_logger.dart';
