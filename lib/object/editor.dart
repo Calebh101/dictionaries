@@ -6,7 +6,7 @@ import 'package:localpkg/dialogue.dart';
 import 'package:menu_bar/menu_bar.dart';
 import 'package:styled_logger/styled_logger.dart';
 
-bool throwOnBinary = true;
+bool throwOnBinary = false; // Debug option
 String? currentFileName;
 List<NodeData> currentExpanded = [];
 

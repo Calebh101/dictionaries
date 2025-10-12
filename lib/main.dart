@@ -1,8 +1,6 @@
-// ignore_for_file: constant_identifier_names
-
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:dictionaries/object/editor.dart';
 import 'package:dictionaries/object/main.dart';
 import 'package:dictionaries/object/nodes.dart';
 import 'package:file_picker/file_picker.dart';
@@ -86,9 +84,15 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) {
     List<HomeOption> children = [
       HomeOption("New", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
-        activateEditor(File("/home/caleb/Downloads/${throwOnBinary ? "MyDictionary.dictionary" : "config2a.plist"}").readAsBytesSync());
+        activateEditor(utf8.encode(jsonEncode({})));
       }),
-      HomeOption("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, onActivate: () async {}),
+      HomeOption("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, onActivate: () async {
+        var result = await FilePicker.platform.pickFiles(withData: true);
+        Uint8List? bytes = result?.files.firstOrNull?.bytes;
+        Logger.print("Found ${bytes?.length ?? -1} bytes");
+        if (bytes == null || bytes.isEmpty) return;
+        activateEditor(bytes);
+      }),
       HomeOption("Download", description: "Download an existing dictionary.", icon: Icons.download, child: flagSet(download_loading) ? CircularProgressIndicator() : null, onActivate: () async {
         if (flagSet(download_loading)) return;
       }),
@@ -151,7 +155,9 @@ class _EditorMainPageState extends State<EditorMainPage> {
 }
 
 Widget? decideEditor(Uint8List raw) {
-  return ObjectEditorPage(root: RootNode.tryParse(raw)!);
+  var root = RootNode.tryParse(raw);
+  if (root == null) return null;
+  return ObjectEditorPage(root: root);
 }
 
 Future<String?> saveFile({
