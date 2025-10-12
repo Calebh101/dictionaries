@@ -308,7 +308,7 @@ class RootNode {
       int headerSize = bytes.sublist(10, 12).toUint16();
       Version fileVersion = Version.parseBinary(bytes.sublist(12, 22));
       Logger.print("Found file details: headerSize=$headerSize version=$fileVersion");
-      NodeBinaryManager.initGlobalOffset(headerSize);
+      NodeBinaryManager.init(headerSize);
 
       Uint8List content = bytes.sublist(headerSize);
       int rootLength = content.sublist(0, 8).toUint64();
@@ -470,12 +470,8 @@ class CustomNode {
 }
 
 class NodeBinaryManager {
-  /// Purely for debugging.
-  static int globalOffset = 0;
-
-  static void initGlobalOffset(int headerSize) {
+  static void init(int headerSize) {
     RootNode.nodes = 0;
-    globalOffset = headerSize;
   }
 
   static int getSignature(int method, [NodeType? type]) {
@@ -565,7 +561,7 @@ class NodeBinaryManager {
         return Node(input: data);
       case NodeType.map:
       case NodeType.array:
-        Logger.verbose("Found node $type of ${content.length} bytes at offset $globalOffset");
+        Logger.verbose("Found node $type of ${content.length} bytes");
         return Node(input: null, children: childrenFromBinary(content), isParentType: type == NodeType.array ? 1 : 2);
     }
   }
@@ -600,20 +596,20 @@ class NodeBinaryManager {
       NodeType type = NodeType.values[typeInt];
       Node child = nodeFromBinary(type, content);
 
-      Logger.verbose("${RootNode.nodes}. Found node data of type $type (signature of ${signature.formatByte()}) at offset $globalOffset");
+      Logger.verbose("${RootNode.nodes}. Found node data of type $type (signature of ${signature.formatByte()})");
       return child;
 
       // [typeInt] is an unsigned 5-bit integer representing the type of node. This gives us 31 values, which is plenty.
       // We then use the rest of the content to parse the child.
     } else if (method == 1) { // [NodeKeyValuePair]
-      Logger.verbose("${RootNode.nodes}. Found NKVP data (signature of ${signature.formatByte()}) at offset $globalOffset");
+      Logger.verbose("${RootNode.nodes}. Found NKVP data (signature of ${signature.formatByte()})");
       return nkvpFromBinary(content);
 
       // Not much to do here, as the [nkvpFromBinary] function handles this for us, and we've already done the method parsing above.
       // Note that the type byte's upper 5 bits are unused here; I wonder if there's a future use for them though...
     } else {
       // An alien node type has approached us, shoot it with an error
-      throw UnimplementedError("Unrecognized node method at offset $globalOffset at node ${RootNode.nodes}: $method");
+      throw UnimplementedError("Unrecognized node method at node ${RootNode.nodes}: $method");
     }
   }
 

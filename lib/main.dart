@@ -17,7 +17,7 @@ final Version version = Version.parse("0.0.0A");
 
 void main() {
   if (kDebugMode) Logger.enable();
-  if (kDebugMode) Logger.setVerbose(true);
+  if (kDebugMode) Logger.setVerbose(false);
   runApp(const MainApp());
 }
 
