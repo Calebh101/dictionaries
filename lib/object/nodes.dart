@@ -94,14 +94,6 @@ abstract class NodeData {
   int index = 0;
   NodeData({required this.children}) : id = Uuid().v4();
 
-  factory NodeData.fromBinary(Uint8List bytes) {
-    throw UnimplementedError('fromBinary must be implemented by subclasses.');
-  }
-
-  factory NodeData.fromXml(Uint8List bytes) {
-    throw UnimplementedError('fromXml must be implemented by subclasses.');
-  }
-
   Node get node;
   bool get isRoot => false;
 }
@@ -127,68 +119,11 @@ class Node extends NodeData {
   NodeType identify({bool debug = false}) => _identify(debug: debug);
   bool get hasChildren => children.isNotEmpty;
 
-  Uint8List attributesToBinary() {
+  List<int> attributesToBinary() {
     List<int> bytes = [];
     for (NodeAttribute attribute in attributes) bytes.addAll([...utf8.encode(attribute.name), 0x00, ...utf8.encode(attribute.value), 0x00]);
-    return Uint8List.fromList(bytes);
-  }
-
-  static Uint8List toBinary(NodeData node) {
-    if (node is Node) {
-      int type = node.type.index;
-
-      List<int> process() {
-        switch (node.type) {
-          case NodeType.string: return utf8.encode(node.input as String);
-          case NodeType.number:
-            ByteData data = ByteData(8);
-            if (node.input is int) data.setInt64(0, node.input as int, IntParser.defaultEndian);
-            if (node.input is double) data.setFloat64(0, node.input as double, IntParser.defaultEndian);
-            return data.buffer.asUint8List();
-          case NodeType.empty: return [];
-          case NodeType.data: return node.input as Uint8List;
-          case NodeType.date:
-            ByteData data = ByteData(8);
-            data.setInt64(0, (node.input as DateTime).millisecondsSinceEpoch, IntParser.defaultEndian);
-            return data.buffer.asUint8List();
-          case NodeType.boolean: return [(node.input as bool) ? 1 : 0];
-          case NodeType.map:
-          case NodeType.array:
-            ByteData length = ByteData(8)..setUint64(0, node.children.length, IntParser.defaultEndian);
-            List<int> bytes = [];
-
-            for (Uint8List child in node.children.map((x) => toBinary(x))) bytes.addAll(child);
-            return [...length.buffer.asUint8List(), ...bytes];
-
-            // First we say how many children there are.
-            // Then we use [Node.toBinary] on those children too.
-          case NodeType.dynamic:
-            return (node.input as CustomNode).toBinary();
-        }
-      }
-
-      List<int> bytes = process();
-      ByteData length = ByteData(8);
-      length.setUint64(0, bytes.length, IntParser.defaultEndian);
-      return Uint8List.fromList([...length.buffer.asUint8List(), ...utf8.encode("NODE"), type, ...bytes]);
-
-      // First, we'll include "NODE" in UTF8 as the first 4 bytes.
-      // Second, we'll include the type as a single-byte integer.
-      // Then we'll include the length of the contents as an unsigned 64-bit integer.
-      // Finally, we'll include the actual content.
-    } else if (node is NodeKeyValuePair) {
-      List<int> bytes = [...utf8.encode(node.key), 0x00, ...toBinary(node.node)];
-      ByteData length = ByteData(8);
-      length.setUint64(0, bytes.length, IntParser.defaultEndian);
-      return Uint8List.fromList([...length.buffer.asUint8List(), ...utf8.encode("NKVP"), ...bytes]);
-
-      // First, we'll include "NVKP" (NodeKeyValuePair) in UTF8 as the first 4 bytes.
-      // Then we'll include the null-terminated key.
-      // Finally we'll call [Node.toBinary] on the contents.
-      // The length is calculated based on the key, null terminator, and size of the child binary alltogether.
-    } else {
-      throw UnimplementedError();
-    }
+    ByteData length = ByteData(8)..setUint64(0, bytes.length, IntParser.defaultEndian);
+    return [...length.buffer.asUint8List(), ...bytes];
   }
 
   static Object? toJson(NodeData input, NodeConversionMode mode) {
@@ -306,7 +241,7 @@ class RootNode {
 
   static const String fileMagic = "XC-DICT";
   static late RootNode instance;
-  static int _nodes = 0;
+  static int nodes = 0;
 
   void rebuild() {
     _buildRootLookup();
@@ -350,115 +285,34 @@ class RootNode {
     List<int> magic = utf8.encode(fileMagic);
     if (magic.length < 10) magic = [...magic, ...List.filled(10 - magic.length, 0x00)];
 
-    List<int> header = [...utf8.encode(fileMagic), ...headerSizeBytes, ...version.toBinary()];
+    List<int> header = [...magic, ...headerSizeBytes, ...version.toBinary(), ...utf8.encode("Calebh101")];
     if (header.length < headerSize) header.addAll(List.filled(headerSize - header.length, 0x00));
 
-    List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => Node.toBinary(x))];
-    return Uint8List.fromList([...header, ...body, ...utf8.encode("CALEBH101")]);
+    List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => NodeBinaryManager.nodeDataToBinary(x))];
+    return Uint8List.fromList([...header, ...body]);
 
     // The first 10 bytes are the UTF8 of the file magic.
     // The application version is then included. This is exactly 10 bytes.
     // The header offset is then included as an unsigned 16-bit integer.
+    // We then add a watermark :)
     // The header is then padded.
-    // The body is first an unsigned 64-bit integer with the length of the children, followed by the children contents. This is continued in [Node.toBinary].
-    // Finally, we add a small watermark :)
-  }
-
-  static List<NodeData> _handleChildren(Uint8List bytes, int layer, int start) {
-    int offset = 0;
-    List<NodeData> children = [];
-    Logger.verbose("Handling children at offset $offset (${offset.formatByte()})...");
-
-    while (offset < bytes.length) {
-      List<int> header = bytes.sublist(offset, offset + 12);
-      int length = header.sublist(0, 8).toUint64();
-      String magic = utf8.decode(header.sublist(8, 12));
-
-      Logger.verbose("Found child $magic of $length bytes at offset $offset (${start + offset})");
-
-      offset += 12;
-      children.add(_process(bytes.sublist(offset, offset + length), magic, layer + 1, start + offset + length));
-      offset += length;
-    }
-
-    return children;
-  }
-
-  static NodeData _process(Uint8List bytes, String magic, int layer, int start) {
-    try {
-      Logger.verbose("Found node $_nodes:$layer:$magic at offset $start (0x${start.formatByte()}) of ${bytes.length} bytes: ${bytes.formatBytes(max: 30)}");
-      _nodes++;
-
-      if (magic == "NODE") {
-        Uint8List typeBytes = bytes.sublist(4, 5);
-        Logger.verbose("Found type bytes of $typeBytes");
-        NodeType type = NodeType.values[typeBytes.first];
-        Uint8List content = bytes.sublist(5);
-
-        switch (type) {
-          case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
-          case NodeType.data: return Node(input: content);
-          case NodeType.empty: return Node(input: null);
-          case NodeType.number: return Node(input: content.toInt64());
-          case NodeType.date:
-            int ms = content.toInt64();
-            DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
-            return Node(input: date);
-          case NodeType.string:
-            String text = utf8.decode(content);
-            return Node(input: text);
-          case NodeType.dynamic:
-            int offset = 0;
-            String key = "";
-            String value = "";
-
-            while (content[offset] != 0) {
-              key += utf8.decode([content[offset]]);
-              offset++;
-            }
-
-            offset++;
-
-            while (content[offset] != 0) {
-              value += utf8.decode([content[offset]]);
-              offset++;
-            }
-
-            CustomNode data = CustomNode(key, value);
-            return Node(input: data);
-          case NodeType.map:
-          case NodeType.array:
-            return Node(input: _handleChildren(content, layer + 1, start + 5));
-        }
-      } else if (magic == "NKVP") {
-        int nullIndex = bytes.indexOf(0x00);
-        List<int> utf8Bytes = (nullIndex != -1) ? bytes.sublist(0, nullIndex) : bytes;
-        Uint8List child = bytes.sublist(nullIndex + 1);
-        String magic = utf8.decode(child.sublist(8, 12));
-        Logger.verbose("Child=$magic, first null index is $nullIndex/${bytes.length}, leaving ${child.length} bytes: ${child.formatBytes()}");
-        return NodeKeyValuePair(key: utf8.decode(utf8Bytes), value: _process(child.sublist(12), magic, layer + 1, start + child.length) as Node);
-      } else {
-        throw Exception("Found invalid magic of ${bytes.sublist(0, 4).map((x) => "0x${x.toRadixString(16).toUpperCase().padLeft(0, '0')}")} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')})");
-      }
-    } catch (e) {
-      if (throwOnBinary) rethrow;
-      throw Exception("Exception ${e.runtimeType} at offset $start (0x${start.toRadixString(16).toUpperCase().padLeft(2, '0')}): $e");
-    }
+    // The body is first an unsigned 64-bit integer with the length of the children, followed by the children contents. This is continued in [NodeBinaryManager.nodeDataToBinary].
   }
 
   static RootNode? fromBinary(Uint8List bytes) {
     try {
       if (utf8.decode(bytes.sublist(0, fileMagic.length)) != fileMagic) throw Exception("Invalid magic.");
-      _nodes = 0;
+      nodes = 0;
 
       int headerSize = bytes.sublist(10, 12).toUint16();
       Version fileVersion = Version.parseBinary(bytes.sublist(12, 22));
       Logger.print("Found file details: headerSize=$headerSize version=$fileVersion");
+      NodeBinaryManager.initGlobalOffset(headerSize);
 
       Uint8List content = bytes.sublist(headerSize);
       int rootLength = content.sublist(0, 8).toUint64();
       Logger.print("Found $rootLength children of ${content.length} bytes");
-      List<NodeData> children = _handleChildren(content.sublist(8), 0, headerSize + 8);
+      List<NodeData> children = NodeBinaryManager.childrenFromBinary(content.sublist(8));
       return RootNode(children: children, type: children.every((x) => x is Node) ? RootNodeType.array : (children.every((x) => x is NodeKeyValuePair) ? RootNodeType.map : throw Exception("Inconsistent children")));
     } catch (e) {
       if (throwOnBinary) rethrow;
@@ -609,5 +463,171 @@ class CustomNode {
 
   Uint8List toBinary() {
     return Uint8List.fromList([...utf8.encode(key), 0x00, ...utf8.encode(value), 0x00]);
+  }
+}
+
+class NodeBinaryManager {
+  /// Purely for debugging.
+  static int globalOffset = 0;
+
+  static void initGlobalOffset(int headerSize) {
+    RootNode.nodes = 0;
+    globalOffset = headerSize;
+  }
+
+  static int getSignature(int method, [NodeType? type]) {
+    // Generate 1 byte that contains the "method" and the optional node type (if it's a standard [Node]).
+    return ((method & 0x07) << 5) | ((type?.index ?? 0) & 0x1F);
+  }
+
+  static List<int> nodeDataToBinary(NodeData node) {
+    List<int> bytes;
+    int signature;
+
+    if (node is Node) {
+      bytes = nodeToBinary(node);
+      signature = getSignature(0, node.type);
+    } else if (node is NodeKeyValuePair) {
+      bytes = nkvpToBinary(node);
+      signature = getSignature(1);
+    } else {
+      throw UnimplementedError();
+    }
+
+    ByteData lengthData = ByteData(8)..setUint64(0, bytes.length + 1 /* signature */, IntParser.defaultEndian);
+    return [...lengthData.buffer.asUint8List(), signature, ...bytes];
+  }
+
+  static List<int> nodeToBinary(Node node) {
+    switch (node.type) {
+      case NodeType.string: return utf8.encode(node.input as String);
+      case NodeType.number:
+        ByteData data = ByteData(8);
+        if (node.input is int) data.setInt64(0, node.input as int, IntParser.defaultEndian);
+        if (node.input is double) data.setFloat64(0, node.input as double, IntParser.defaultEndian);
+        return data.buffer.asUint8List();
+      case NodeType.empty: return [];
+      case NodeType.data: return node.input as Uint8List;
+      case NodeType.date:
+        ByteData data = ByteData(8);
+        data.setInt64(0, (node.input as DateTime).millisecondsSinceEpoch, IntParser.defaultEndian);
+        return data.buffer.asUint8List();
+      case NodeType.boolean: return [(node.input as bool) ? 1 : 0];
+      case NodeType.map:
+      case NodeType.array:
+        List<int> bytes = [];
+        for (List<int> child in node.children.map((x) => nodeDataToBinary(x))) bytes.addAll(child);
+        return bytes;
+      case NodeType.dynamic:
+        return (node.input as CustomNode).toBinary();
+    }
+  }
+
+  static List<int> nkvpToBinary(NodeKeyValuePair node) {
+    // Encode the key with a null terminator, then include 
+    return [...utf8.encode(node.key), 0x00, ...nodeDataToBinary(node.value)];
+  }
+
+  static Node nodeFromBinary(NodeType type, Uint8List content) {
+    switch (type) {
+      case NodeType.boolean: return Node(input: content.first == 1 ? true : false);
+      case NodeType.data: return Node(input: content);
+      case NodeType.empty: return Node(input: null);
+      case NodeType.number: return Node(input: content.toInt64());
+      case NodeType.date:
+        int ms = content.toInt64();
+        DateTime date = DateTime.fromMillisecondsSinceEpoch(ms);
+        return Node(input: date);
+      case NodeType.string:
+        String text = utf8.decode(content, allowMalformed: true);
+        return Node(input: text);
+      case NodeType.dynamic:
+        int offset = 0;
+        String key = "";
+        String value = "";
+
+        while (content[offset] != 0) {
+          key += utf8.decode([content[offset]]);
+          offset++;
+        }
+
+        offset++;
+
+        while (content[offset] != 0) {
+          value += utf8.decode([content[offset]]);
+          offset++;
+        }
+
+        CustomNode data = CustomNode(key, value);
+        return Node(input: data);
+      case NodeType.map:
+      case NodeType.array:
+        Logger.verbose("Found node $type of ${content.length} bytes at offset $globalOffset");
+        return Node(input: null, children: childrenFromBinary(content), isParentType: type == NodeType.array ? 1 : 2);
+    }
+  }
+
+  static NodeKeyValuePair nkvpFromBinary(Uint8List content) {
+    String key = "";
+    int offset = 0;
+
+    while (content[offset] != 0x00) {
+      key += utf8.decode([content[offset]]);
+      offset++;
+    }
+
+    offset += 9; // Get past the null character and length bytes.
+    Uint8List bytes = content.sublist(offset);
+    Logger.verbose("Found bytes: ${bytes.formatBytes(max: 30)} (dictionary: ${getSignature(0, NodeType.map).formatByte()})");
+    return NodeKeyValuePair(key: key, value: nodeDataFromBinary(bytes) as Node);
+  }
+
+  static NodeData nodeDataFromBinary(Uint8List bytes) {
+    int signature = bytes.first;
+    int method = (signature >> 5) & 0x07;
+    Uint8List content = bytes.sublist(1);
+
+    RootNode.nodes++; // A record for debugging
+    Logger.verbose("${RootNode.nodes}. Found node of signature ${signature.formatByte()}");
+
+    // [method] is an unsigned 3-bit integer that represents the "method" (for lack of better words) of node we're dealing with. This can be either a [Node] or a [NodeKeyValuePair]. However, if I decide to add more node types in the future, we have 7 integers that can be represented with this.
+
+    if (method == 0) { // [Node]
+      int typeInt = signature & 0x1F;
+      NodeType type = NodeType.values[typeInt];
+      Node child = nodeFromBinary(type, content);
+
+      Logger.verbose("${RootNode.nodes}. Found node data of type $type (signature of ${signature.formatByte()}) at offset $globalOffset");
+      return child;
+
+      // [typeInt] is an unsigned 5-bit integer representing the type of node. This gives us 31 values, which is plenty.
+      // We then use the rest of the content to parse the child.
+    } else if (method == 1) { // [NodeKeyValuePair]
+      Logger.verbose("${RootNode.nodes}. Found NKVP data (signature of ${signature.formatByte()}) at offset $globalOffset");
+      return nkvpFromBinary(content);
+
+      // Not much to do here, as the [nkvpFromBinary] function handles this for us, and we've already done the method parsing above.
+      // Note that the type byte's upper 5 bits are unused here; I wonder if there's a future use for them though...
+    } else {
+      // An alien node type has approached us, shoot it with an error
+      throw UnimplementedError("Unrecognized node method at offset $globalOffset at node ${RootNode.nodes}: $method");
+    }
+  }
+
+  static List<NodeData> childrenFromBinary(Uint8List bytes) {
+    List<NodeData> children = [];
+    int offset = 0;
+
+    while (offset < bytes.length) {
+      int length = bytes.sublist(offset, offset + 8).toUint64();
+      Uint8List child = bytes.sublist(offset + 8, offset + 8 + length);
+
+      Logger.verbose("Found node data of ${child.length} bytes (expected $length bytes) at offset $offset");
+      children.add(nodeDataFromBinary(child));
+      offset += 8 + length;
+      Logger.verbose("Children is now at ${children.length}");
+    }
+
+    return children;
   }
 }
