@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:bson/bson.dart';
 import 'package:dictionaries/main.dart';
 import 'package:dictionaries/object/editor.dart';
 import 'package:intl/intl.dart';
@@ -429,25 +430,27 @@ class RootNode {
 
   static RootNode? tryParse(Uint8List raw) {
     RootNode? fromBinary = RootNode.fromBinary(raw);
+    List<Object> errors = [];
     if (fromBinary != null) return fromBinary;
 
-    try {
-      Logger.print("Trying JSON...");
-      return RootNode.fromJson(utf8.decode(raw));
-    } catch (a) {
+    List<RootNode Function(Uint8List raw)> functions = [
+      (raw) => RootNode.fromJson(utf8.decode(raw)),
+      (raw) => RootNode.fromYaml(utf8.decode(raw)),
+      (raw) => RootNode.fromPlist(utf8.decode(raw)),
+      (raw) => RootNode.fromObject(BsonCodec.deserialize(BsonBinary.from(raw))),
+    ];
+
+    for (var function in functions) {
       try {
-        Logger.print("Trying YAML...");
-        return RootNode.fromYaml(utf8.decode(raw));
-      } catch (b) {
-        try {
-          Logger.print("Trying PList...");
-          return RootNode.fromPlist(utf8.decode(raw));
-        } catch (c) {
-          Logger.warn("Unable to parse input: ${[a, b, c].join(", ")}");
-          return null;
-        }
+        Logger.print("Trying function ${function.hashCode}...");
+        return function.call(raw);
+      } catch (e) {
+        errors.add(e);
       }
     }
+
+    Logger.warn("Unable to parse input: ${errors.join(", ")}");
+    return null;
   }
 
   static void assignInstance(RootNode value) {
