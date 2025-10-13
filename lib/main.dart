@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:js_interop';
 
+import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/main.dart';
 import 'package:dictionaries/src/nodes.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_environments_plus/flutter_environments_plus.dart';
@@ -12,6 +13,7 @@ import 'package:localpkg/classes.dart';
 import 'package:localpkg/dialogue.dart';
 import 'package:localpkg/functions.dart';
 import 'package:styled_logger/styled_logger.dart';
+import 'package:web/web.dart' as web;
 
 final Version version = Version.parse("0.0.0A");
 final Version binaryVersion = Version.parse("1.0.0A");
@@ -162,20 +164,20 @@ Widget? decideEditor(Uint8List raw) {
   return ObjectEditorPage(root: root);
 }
 
-Future<String?> saveFile({
+Future<bool> saveFile({
   required String name,
   required Uint8List bytes,
   String extension = "dictionary",
   String mime = "application/xc-dict",
 }) async {
   if (Environment.isWeb) {
-    return await FileSaver.instance.saveFile(
-      name: name,
-      fileExtension: extension,
-      mimeType: MimeType.custom,
-      customMimeType: mime,
-      bytes: bytes,
-    );
+    final blob = web.Blob([bytes].jsify() as JSArray<web.BlobPart>, web.BlobPropertyBag(type: mime));
+    final url = web.URL.createObjectURL(blob);
+    final anchor = web.HTMLAnchorElement()..href = url..download = "$name.$extension"..click();
+
+    web.URL.revokeObjectURL(url);
+    currentFileName = name;
+    return true;
   } else if (Environment.isDesktop) {
     String? result = await FilePicker.platform.saveFile(
       dialogTitle: 'Save Dictionary As...',
@@ -185,9 +187,10 @@ Future<String?> saveFile({
     if (result != null) {
       File file = File(result);
       await file.writeAsBytes(bytes);
-      return result;
+      currentFileName = name;
+      return true;
     } else {
-      return null;
+      return false;
     }
   } else {
     throw UnimplementedError();

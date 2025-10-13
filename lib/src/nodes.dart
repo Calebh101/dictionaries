@@ -431,6 +431,7 @@ class RootNode {
         Logger.print("Trying function ${function.hashCode}...");
         return function.call(raw);
       } catch (e) {
+        Logger.print("Function ${function.hashCode} failed: $e");
         errors.add(e);
       }
     }

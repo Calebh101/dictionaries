@@ -54,9 +54,8 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
         BarButton(text: Text("File"), submenu: SubMenu(menuItems: [
           MenuButton(text: Text("Export"), submenu: SubMenu(menuItems: [
             MenuButton(text: Text("Export as Dictionary"), onTap: () async {
-              String? result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary());
-              if (result == null) return;
-              currentFileName = result;
+              bool result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary());
+              if (result == false) return;
               SnackBarManager.show(context, "Saved file to $currentFileName!");
             }),
           ])),
