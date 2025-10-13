@@ -157,9 +157,9 @@ class Node extends NodeData {
     if (debug) Logger.print('Node $id debug: children=$children (${children.runtimeType}) isEmpty=${children.isEmpty}');
 
     if (isParentType == 1) {
-      return NodeType.map;
-    } else if (isParentType == 2) {
       return NodeType.array;
+    } else if (isParentType == 2) {
+      return NodeType.map;
     } else if (input == null) {
       return NodeType.empty;
     } else if (input is String) {
@@ -273,7 +273,7 @@ class RootNode {
     List<int> header = [...magic, ...headerSizeBytes, ...binaryVersion.toBinary()];
     if (header.length < headerSize) header.addAll(List.filled(headerSize - header.length, 0x00));
 
-    List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => NodeBinaryManager.nodeDataToBinary(x)), ...utf8.encode("Calebh101").padLeft(16, 0x00)];
+    List<int> body = [...length.buffer.asUint8List(), ...children.expand((x) => NodeBinaryManager.nodeDataToBinary(x)), ...utf8.encode("Calebh101").padLeft(16, 0x00), 0x99];
     return Uint8List.fromList([...header, ...body]);
 
     // The first 10 bytes are the UTF8 of the file magic.
@@ -287,9 +287,9 @@ class RootNode {
 
   static RootNode? fromBinary(Uint8List bytes) {
     try {
-      bytes = bytes.sublist(0, bytes.length - 16); // Get rid of the watermark we added
       if (utf8.decode(bytes.sublist(0, fileMagic.length)) != fileMagic) throw Exception("Invalid magic.");
-      nodes = 0;
+      if (bytes.last != 0x99) throw Exception("Invalid end of file.");
+      bytes = bytes.sublist(0, bytes.length - 17); // Get rid of the watermark we added
 
       int headerSize = bytes.sublist(10, 12).toUint16();
       Version fileVersion = Version.parseBinary(bytes.sublist(12, 22));

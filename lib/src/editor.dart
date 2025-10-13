@@ -4,6 +4,7 @@ import 'package:dictionaries/src/nodes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:localpkg/dialogue.dart';
+import 'package:localpkg/functions.dart';
 import 'package:menu_bar/menu_bar.dart';
 import 'package:styled_logger/styled_logger.dart';
 
@@ -51,12 +52,19 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
     return MenuBarWidget(
       barButtons: [
         BarButton(text: Text("File"), submenu: SubMenu(menuItems: [
-          MenuButton(text: Text("Export as Dictionary"), onTap: () async {
-            String? result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary());
-            if (result == null) return;
-            List<String> text = result.split(RegExp("[\\|/]")).last.split(".");
-            currentFileName = text.sublist(0, text.length - 2).join(".");
-            SnackBarManager.show(context, "Saved file to $currentFileName!");
+          MenuButton(text: Text("Export"), submenu: SubMenu(menuItems: [
+            MenuButton(text: Text("Export as Dictionary"), onTap: () async {
+              String? result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary());
+              if (result == null) return;
+              currentFileName = result;
+              SnackBarManager.show(context, "Saved file to $currentFileName!");
+            }),
+          ])),
+          MenuDivider(),
+          MenuButton(text: Text("Return to Home"), onTap: () async {
+            bool? result = await ConfirmationDialogue.show(context: context, title: "Are You Sure?", description: "Are you sure you want to return to the home page? All unsaved data will be lost.");
+            Logger.print("Received result of $result");
+            if (result == true) SimpleNavigator.navigate(context: context, page: Home(), mode: NavigatorMode.pushReplacement);
           }),
         ])),
       ],
