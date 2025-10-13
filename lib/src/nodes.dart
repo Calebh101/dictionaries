@@ -107,7 +107,7 @@ class Node extends NodeData {
   List<int> attributesToBinary() {
     List<int> bytes = [];
     for (NodeAttribute attribute in attributes) bytes.addAll([...utf8.encode(attribute.name), 0x00, ...utf8.encode(attribute.value), 0x00]);
-    ByteData length = ByteData(8)..setUint64(0, bytes.length, IntParser.defaultEndian);
+    ByteData length = ByteData(8)..setUint64Safe(0, bytes.length, IntParser.defaultEndian);
     return [...length.buffer.asUint8List(), ...bytes];
   }
 
@@ -261,7 +261,7 @@ class RootNode {
   }
 
   Uint8List toBinary() {
-    ByteData length = ByteData(8)..setUint64(0, children.length, IntParser.defaultEndian);
+    ByteData length = ByteData(8)..setUint64Safe(0, children.length, IntParser.defaultEndian);
     int headerSize = 128;
     ByteData headerSizeData = ByteData(2)..setUint16(0, headerSize, IntParser.defaultEndian);
     Uint8List headerSizeBytes = headerSizeData.buffer.asUint8List();
@@ -479,7 +479,7 @@ class NodeBinaryManager {
       throw UnimplementedError();
     }
 
-    ByteData lengthData = ByteData(8)..setUint64(0, bytes.length + 1 /* signature */, IntParser.defaultEndian);
+    ByteData lengthData = ByteData(8)..setUint64Safe(0, bytes.length + 1 /* signature */, IntParser.defaultEndian);
     return [...lengthData.buffer.asUint8List(), signature, ...bytes];
   }
 
@@ -488,14 +488,13 @@ class NodeBinaryManager {
       case NodeType.string: return utf8.encode(node.input as String);
       case NodeType.number:
         ByteData data = ByteData(8);
-        if (node.input is int) data.setInt64(0, node.input as int, IntParser.defaultEndian);
+        if (node.input is int) data.setInt64Safe(0, node.input as int, IntParser.defaultEndian);
         if (node.input is double) data.setFloat64(0, node.input as double, IntParser.defaultEndian);
         return [node.input is double ? 1 : 0, ...data.buffer.asUint8List()];
       case NodeType.empty: return [];
       case NodeType.data: return node.input as Uint8List;
       case NodeType.date:
-        ByteData data = ByteData(8);
-        data.setInt64(0, (node.input as DateTime).millisecondsSinceEpoch, IntParser.defaultEndian);
+        ByteData data = ByteData(8)..setInt64Safe(0, (node.input as DateTime).millisecondsSinceEpoch, IntParser.defaultEndian);
         return data.buffer.asUint8List();
       case NodeType.boolean: return [(node.input as bool) ? 1 : 0];
       case NodeType.map:

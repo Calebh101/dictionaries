@@ -285,8 +285,8 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "3b05bbb129c3c6ef66c2eb9964b41dc559e7b9df"
-      url: "https://github.com/Calebh101/localpkg-flutter-2"
+      resolved-ref: "7d2b92b1423675d9d7647d17375a6ad7c01b606f"
+      url: "https://github.com/Calebh101/localpkg-flutter-2.git"
     source: git
     version: "0.0.0"
   mahop_data_table:
