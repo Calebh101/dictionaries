@@ -33,6 +33,7 @@ class MainApp extends StatelessWidget {
       darkTheme: ThemeData.dark(),
       themeMode: ThemeMode.system,
       home: Home(),
+      title: "Dictionaries",
     );
   }
 }
