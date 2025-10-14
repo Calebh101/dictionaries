@@ -471,7 +471,7 @@ class NodeBinaryManager {
     int signature;
 
     if (node is Node) {
-      bytes = nodeToBinary(node);
+      bytes = [...node.attributesToBinary(), ...nodeToBinary(node)];
       signature = getSignature(0, node.type);
     } else if (node is NodeKeyValuePair) {
       bytes = nkvpToBinary(node);
@@ -580,7 +580,28 @@ class NodeBinaryManager {
     if (varient == 0) { // [Node]
       int typeInt = signature & 0x1F;
       NodeType type = NodeType.values[typeInt];
-      Node child = nodeFromBinary(type, content);
+
+      int attributeLength = content.sublist(0, 8).toUint64();
+      List<int> attributeData = content.sublist(8, 8 + attributeLength);
+      List<NodeAttribute> attributes = [];
+      int offset = 0;
+
+      while (offset < attributeLength) {
+        int keyEnd = attributeData.indexOf(0x00, offset);
+        if (keyEnd == -1) break;
+        String key = utf8.decode(attributeData.sublist(offset, keyEnd));
+        offset = keyEnd + 1;
+
+        int valueEnd = attributeData.indexOf(0x00, offset);
+        if (valueEnd == -1) break;
+        String value = utf8.decode(attributeData.sublist(offset, valueEnd));
+
+        offset = valueEnd + 1;
+        attributes.add(NodeAttribute(key, value));
+      }
+
+      content = content.sublist(8 + attributeLength);
+      Node child = nodeFromBinary(type, content)..attributes = attributes;
 
       Logger.verbose("${RootNode.nodes}. Found node data of type $type (signature of ${signature.formatByte()})");
       return child;

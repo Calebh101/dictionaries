@@ -28,7 +28,15 @@ Use the 8-byte length to determine how long the signature + node content is, the
 
 #### Nodes
 
-After the signature, this is just raw data. However, arrays and dictionaries are different, in that their bytes are the same layout as the root children layout from above (except that there's no 8 bytes determining child count).
+After the signature, there is an unsigned 64-bit integer saying how long the attribute data is, the attribute data, then the rest is just raw data.
+
+##### Attributes
+
+The length says how long the attributes are, not including the length bytes themselves. Each attribute is a null-terminated UTF8 key, then a null-terminated UTF8 value.
+
+##### Data
+
+Arrays and dictionaries are different than typical data types, in that their bytes are the same layout as the root children layout from above (except that there's no 8 bytes determining child count).
 
 Here's how the rest are parsed:
 
