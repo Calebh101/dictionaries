@@ -1,19 +1,17 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:js_interop';
 
-import 'package:dictionaries/src/editor.dart';
+import 'package:collection/collection.dart';
 import 'package:dictionaries/src/main.dart';
 import 'package:dictionaries/src/nodes.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_environments_plus/flutter_environments_plus.dart';
 import 'package:localpkg/classes.dart';
 import 'package:localpkg/dialogue.dart';
 import 'package:localpkg/functions.dart';
 import 'package:styled_logger/styled_logger.dart';
-import 'package:web/web.dart' as web;
+
+export 'files/desktop.dart' if (dart.library.js_interop) 'files/web.dart';
 
 final Version version = Version.parse("0.0.0A");
 final Version binaryVersion = Version.parse("1.0.0A");
@@ -40,14 +38,25 @@ class MainApp extends StatelessWidget {
   }
 }
 
-class HomeOption {
+abstract class HomeNode {
   final String text;
   final String description;
   final IconData? icon;
   final Widget? child;
-  final Future<void> Function() onActivate;
+  final int id;
 
-  const HomeOption(this.text, {required this.description, this.icon, this.child, required this.onActivate});
+  static int _currentId = 0;
+  HomeNode({required this.text, required this.description, this.icon, this.child}) : id = _currentId++;
+}
+
+class HomeOption extends HomeNode {
+  final Future<void> Function() onActivate;
+  HomeOption(String text, {required super.description, super.icon, super.child, required this.onActivate}) : super(text: text);
+}
+
+class HomeMenu extends HomeNode {
+  final List<HomeOption> options;
+  HomeMenu(String text, {required super.description, required this.options, super.icon, super.child}) : super(text: text);
 }
 
 class Home extends StatefulWidget {
@@ -67,9 +76,7 @@ class _HomeState extends State<Home> {
   }
 
   void setFlags(List<int> flags) {
-    setState(() {
-      for (int flag in flags) status |= flag;
-    });
+    setState(() => flags.forEach((flag) => status |= flag));
   }
 
   bool activateEditor(Uint8List raw) {
@@ -86,20 +93,22 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
-    List<HomeOption> children = [
-      HomeOption("New", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
+    List<HomeNode> children = [
+      HomeOption("Create", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
         activateEditor(utf8.encode(jsonEncode({})));
       }),
-      HomeOption("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, onActivate: () async {
-        var result = await FilePicker.platform.pickFiles(withData: true);
-        Uint8List? bytes = result?.files.firstOrNull?.bytes;
-        Logger.print("Found ${bytes?.length ?? -1} bytes");
-        if (bytes == null || bytes.isEmpty) return;
-        activateEditor(bytes);
-      }),
-      HomeOption("Download", description: "Download an existing dictionary.", icon: Icons.download, child: flagSet(download_loading) ? CircularProgressIndicator() : null, onActivate: () async {
-        if (flagSet(download_loading)) return;
-      }),
+      HomeMenu("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, options: [
+        HomeOption("Upload from File", description: "Upload an existing dictionary from a file.", icon: Icons.upload, onActivate: () async {
+          var result = await FilePicker.platform.pickFiles(withData: true);
+          Uint8List? bytes = result?.files.firstOrNull?.bytes;
+          Logger.print("Found ${bytes?.length ?? -1} bytes");
+          if (bytes == null || bytes.isEmpty) return;
+          activateEditor(bytes);
+        }),
+        HomeOption("Download from Online", description: "Download an existing dictionary to import.", icon: Icons.download, child: flagSet(download_loading) ? CircularProgressIndicator() : null, onActivate: () async {
+          if (flagSet(download_loading)) return;
+        }),
+      ]),
     ];
 
     return Scaffold(
@@ -107,16 +116,57 @@ class _HomeState extends State<Home> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(children.length, (i) {
-            HomeOption child = children[i];
+            HomeNode child = children[i];
             double size = 48;
       
             return Padding(
               padding: const EdgeInsets.all(8.0),
               child: Tooltip(
                 message: child.description,
-                child: ElevatedButton(onPressed: () {
-                  Logger.print("Activated button: ${child.text}");
-                  child.onActivate.call();
+                child: ElevatedButton(onPressed: () async {
+                  Logger.print("Activated button of type ${child.runtimeType}: ${child.text}");
+
+                  if (child is HomeOption) {
+                    print("Starting function ${child.id}...");
+                    child.onActivate.call();
+                  } else if (child is HomeMenu) {
+                    var result = await showMenu<int>(context: context, positionBuilder: (context, constraints) {
+                      double x = constraints.maxWidth / 2;
+                      double y = constraints.maxHeight / 2;
+                      return RelativeRect.fromLTRB(x, y, x, y);
+                    }, items: child.options.map((item) {
+                      return PopupMenuItem(
+                        value: item.id,
+                        child: Row(
+                          children: [
+                            item.child != null ? Padding(
+                              padding: EdgeInsets.all(0),
+                              child: SizedBox(
+                                width: size,
+                                height: size,
+                                child: item.child,
+                              ),
+                            ) : (item.icon != null ? Icon(item.icon, size: size) : null),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text(item.text),
+                                  Text(item.description, style: TextStyle(fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ].whereType<Widget>().toList(),
+                        ),
+                      );
+                    }).whereType<PopupMenuItem<int>>().toList());
+
+                    HomeNode? widget = child.options.firstWhereOrNull((x) => x.id == result);
+                    Logger.print("Got result of $result (${result.runtimeType}) of type ${widget.runtimeType}");
+                    if (widget == null) return;
+                    if (widget is! HomeOption) throw UnimplementedError();
+                    Logger.print("Starting function ${child.id}:${widget.id}...");
+                    widget.onActivate.call();
+                  }
                 }, child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -162,37 +212,4 @@ Widget? decideEditor(Uint8List raw) {
   var root = RootNode.tryParse(raw);
   if (root == null) return null;
   return ObjectEditorPage(root: root);
-}
-
-Future<bool> saveFile({
-  required String name,
-  required Uint8List bytes,
-  String extension = "dictionary",
-  String mime = "application/xc-dict",
-}) async {
-  if (Environment.isWeb) {
-    final blob = web.Blob([bytes].jsify() as JSArray<web.BlobPart>, web.BlobPropertyBag(type: mime));
-    final url = web.URL.createObjectURL(blob);
-    final anchor = web.HTMLAnchorElement()..href = url..download = "$name.$extension"..click();
-
-    web.URL.revokeObjectURL(url);
-    currentFileName = name;
-    return true;
-  } else if (Environment.isDesktop) {
-    String? result = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Dictionary As...',
-      fileName: [name, extension].join("."),
-    );
-
-    if (result != null) {
-      File file = File(result);
-      await file.writeAsBytes(bytes);
-      currentFileName = name;
-      return true;
-    } else {
-      return false;
-    }
-  } else {
-    throw UnimplementedError();
-  }
 }

@@ -9,7 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:json2yaml/json2yaml.dart';
 import 'package:localpkg/classes.dart';
 import 'package:localpkg/functions.dart';
-import 'package:plist_parser/plist_parser.dart';
+import 'package:dictionaries/lib/plist_parser.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
@@ -29,8 +29,8 @@ Object? getDefaultValue(NodeType type) {
     case NodeType.empty: return null;
     case NodeType.array: return [];
     case NodeType.map: return {};
-    case NodeType.date: return DateTime.now();
-    case NodeType.data: return Uint8List(4);
+    case NodeType.date: return DateTime.fromMillisecondsSinceEpoch(0);
+    case NodeType.data: return Uint8List(0);
     case NodeType.dynamic: return null;
   }
 }
@@ -154,9 +154,11 @@ class Node extends NodeData {
   }
 
   NodeType _identify({bool debug = false}) {
-    if (debug) Logger.print('Node $id debug: children=$children (${children.runtimeType}) isEmpty=${children.isEmpty}');
+    if (debug) Logger.print('Node $id debug: type=${input.runtimeType} children=$children (${children.runtimeType}) isEmpty=${children.isEmpty}');
 
-    if (isParentType == 1) {
+    if (input is Uint8List) {
+      return NodeType.data;
+    } else if (isParentType == 1) {
       return NodeType.array;
     } else if (isParentType == 2) {
       return NodeType.map;
@@ -406,6 +408,10 @@ class RootNode {
     return fromObject(PlistParser().parse(input));
   }
 
+  static RootNode fromBplist(Uint8List input) {
+    return fromObject(PlistParser().parseBinaryBytes(input));
+  }
+
   static RootNode fromYaml(String input) {
     return fromObject(loadYaml(input));
   }
@@ -607,6 +613,7 @@ class NodeBinaryManager {
       return child;
 
       // [typeInt] is an unsigned 5-bit integer representing the type of node. This gives us 31 values, which is plenty.
+      // After this, we parse the attributes, which are each UTF8 string, null terminator, UTF8 string, null terminator.
       // We then use the rest of the content to parse the child.
     } else if (varient == 1) { // [NodeKeyValuePair]
       Logger.verbose("${RootNode.nodes}. Found NKVP data (signature of ${signature.formatByte()})");
