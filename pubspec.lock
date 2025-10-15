@@ -300,8 +300,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: ef5c53e4c92ed8e3bc655e4d0ccbd454eac31d3b
-      resolved-ref: ef5c53e4c92ed8e3bc655e4d0ccbd454eac31d3b
+      ref: "16f3771978d5446a1a20a7788e7f07a4dc1cd0b1"
+      resolved-ref: "16f3771978d5446a1a20a7788e7f07a4dc1cd0b1"
       url: "https://github.com/Calebh101/localpkg-flutter-2.git"
     source: git
     version: "2.0.0"

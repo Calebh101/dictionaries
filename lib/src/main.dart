@@ -1,9 +1,8 @@
 import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/nodes.dart';
 import 'package:dictionaries/src/preview.dart';
+import 'package:dictionaries/tabview.dart';
 import 'package:flutter/material.dart';
-import 'package:dictionaries/lib/reorderable_tabbar.dart';
-import 'package:styled_logger/styled_logger.dart';
 
 enum DataType {
   json,
@@ -67,30 +66,16 @@ class ObjectEditorPage extends StatefulWidget {
 
 class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late RootNode root;
-  TabController? controller;
-  List<({ObjectEditorTabType type, Widget content})> tabs = [];
+  UserFocusedTabViewController<ObjectEditorTabType>? controller;
+  List<UserFocusedTab<ObjectEditorTabType>> tabs = [];
   int currentIndex = 0;
 
   @override
   void initState() {
     root = widget.root;
-    tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings].map((x) => (type: x, content: objectEditorTabTypeContent(context, x, root))).toList();
-    initTabController();
+    tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings].map((x) => UserFocusedTab<ObjectEditorTabType>(attachment: x, child: objectEditorTabTypeContent(context, x, root), thumbnail: objectEditorTabTypeToWidget(x))).toList();
+    controller = UserFocusedTabViewController(tabs);
     super.initState();
-  }
-
-  void initTabController() {
-    currentIndex = controller?.index ?? currentIndex;
-    controller?.dispose();
-    controller = TabController(length: tabs.length, vsync: this);
-    navigate(currentIndex);
-  }
-
-  void navigate(int index) {
-    if (index + 1 > (controller?.length ?? 0)) index = (controller?.length ?? 1) - 1;
-    currentIndex = index;
-    Logger.print("Navigating to tab ${index + 1}/${controller?.length ?? 0}...");
-    controller?.animateTo(index);
   }
 
   @override
@@ -105,55 +90,10 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
           preferredSize: Size.fromHeight(kToolbarHeight),
           child: Row(
             children: [
-              Expanded(
-                child: ReorderableTabBar(
-                  controller: controller,
-                  buildDefaultDragHandles: false,
-                  isScrollable: true,
-                  tabBorderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(8),
-                  ),
-                  onReorder: (oldIndex, newIndex) {
-                    var tab = tabs[oldIndex];
-                    if (tab is! ObjectEditorPreview) return;
-
-                    while (tabs[newIndex] is! ObjectEditorPreview) {
-                      newIndex++;
-                      if (newIndex + 1 > tabs.length) return;
-                    }
-
-                    tabs.removeAt(oldIndex);
-                    tabs.insert(newIndex, tab);
-                    setState(() {});
-                  },
-                  tabs: [
-                    ...List.generate(tabs.length, (i) {
-                      var child = tabs[i];
-                      bool preview = child is ObjectEditorPreview;
-                  
-                      return Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            objectEditorTabTypeToWidget(child.type),
-                            if (preview) ...[
-                              SizedBox(width: 8),
-                              IconButton(onPressed: () {
-                                if (tabs.indexOf(child) == controller!.index) navigate(controller!.index - 1);
-                                tabs.remove(child);
-                                initTabController();
-                                setState(() {});
-                              }, icon: Icon(Icons.cancel_outlined)),
-                            ],
-                          ],
-                        ),
-                      );
-                    }),
-                  ].map((x) => Padding(
-                    padding: EdgeInsetsGeometry.all(8),
-                    child: x,
-                  )).toList(),
-                ),
+              UserFocusedTabView(
+                borderRadius: 12,
+                reorderable: true,
+                controller: controller!,
               ),
               Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -171,10 +111,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
                 }, onSelected: (value) {
                   if (value is DataType) {
                     var type = dataTypeToObjectEditorTabType(value);
-                    tabs.add((type: type, content: objectEditorTabTypeContent(context, type, root)));
-                    initTabController();
-                    setState(() {});
-                    navigate(tabs.length - 1);
+                    controller!.addTab(UserFocusedTab(child: objectEditorTabTypeContent(context, type, root), thumbnail: objectEditorTabTypeToWidget(type), attachment: type));
                   }
                 }),
               ),
@@ -182,15 +119,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
           ),
         ),
       ),
-      body: TabBarView(physics: NeverScrollableScrollPhysics(), controller: controller, children: [
-        ...List.generate(tabs.length, (i) {
-          var child = tabs[i];
-      
-          return Center(
-            child: child.content,
-          );
-        }),
-      ]),
+      body: UserFocusedTabViewContent(controller: controller!),
     );
   }
 

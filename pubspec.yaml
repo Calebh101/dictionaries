@@ -13,7 +13,7 @@ dependencies:
   localpkg:
     git:
       url: https://github.com/Calebh101/localpkg-flutter-2.git
-      ref: ef5c53e4c92ed8e3bc655e4d0ccbd454eac31d3b
+      ref: 16f3771978d5446a1a20a7788e7f07a4dc1cd0b1
 
   file_picker: ^10.3.3
   file_saver: ^0.3.1
