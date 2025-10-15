@@ -213,3 +213,8 @@ Widget? decideEditor(Uint8List raw) {
   if (root == null) return null;
   return ObjectEditorPage(root: root);
 }
+
+({bool value, String string}) returnRecord() {
+  final record = (value: true, string: "yes");
+  return record;
+}

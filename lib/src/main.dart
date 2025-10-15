@@ -9,6 +9,7 @@ enum DataType {
   json,
   yaml,
   plist,
+  xml,
 }
 
 enum ObjectEditorTabType {
@@ -16,6 +17,7 @@ enum ObjectEditorTabType {
   json,
   yaml,
   plist,
+  xml,
   settings,
 }
 
@@ -24,6 +26,7 @@ String dataTypeToLanguage(DataType input) {
     case DataType.json: return "json";
     case DataType.yaml: return "yaml";
     case DataType.plist: return "xml";
+    case DataType.xml: return "xml";
   }
 }
 
@@ -32,6 +35,7 @@ String dataTypeToPrettyString(DataType input) {
     case DataType.json: return "JSON";
     case DataType.yaml: return "YAML";
     case DataType.plist: return "PList";
+    case DataType.xml: return "XML";
   }
 }
 
@@ -40,6 +44,7 @@ ObjectEditorTabType dataTypeToObjectEditorTabType(DataType input) {
     case DataType.json: return ObjectEditorTabType.json;
     case DataType.yaml: return ObjectEditorTabType.yaml;
     case DataType.plist: return ObjectEditorTabType.plist;
+    case DataType.xml: return ObjectEditorTabType.xml;
   }
 }
 
@@ -48,6 +53,7 @@ String? compileByType(DataType type, RootNode root) {
     case DataType.json: return root.toJsonString();
     case DataType.yaml: return root.toYamlString();
     case DataType.plist: return root.toPlistString();
+    case DataType.xml: return root.toXmlString();
   }
 }
 
@@ -59,15 +65,16 @@ class ObjectEditorPage extends StatefulWidget {
   State<ObjectEditorPage> createState() => _ObjectEditorPageState();
 }
 
-class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProviderStateMixin {
+class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late RootNode root;
   TabController? controller;
-  List<ObjectEditorTabType> tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings];
+  List<({ObjectEditorTabType type, Widget content})> tabs = [];
   int currentIndex = 0;
 
   @override
   void initState() {
     root = widget.root;
+    tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings].map((x) => (type: x, content: objectEditorTabTypeContent(context, x, root))).toList();
     initTabController();
     super.initState();
   }
@@ -88,6 +95,8 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(["Dictionaries"].join(" - ")),
@@ -105,34 +114,33 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
                     top: Radius.circular(8),
                   ),
                   onReorder: (oldIndex, newIndex) {
-                    ObjectEditorTabType type = tabs[oldIndex];
-                    if (!isObjectEditorTabTypePreview(type)) return;
+                    var tab = tabs[oldIndex];
+                    if (tab is! ObjectEditorPreview) return;
 
-                    while (!isObjectEditorTabTypePreview(tabs[newIndex])) {
+                    while (tabs[newIndex] is! ObjectEditorPreview) {
                       newIndex++;
                       if (newIndex + 1 > tabs.length) return;
                     }
 
                     tabs.removeAt(oldIndex);
-                    tabs.insert(newIndex, type);
+                    tabs.insert(newIndex, tab);
                     setState(() {});
                   },
                   tabs: [
                     ...List.generate(tabs.length, (i) {
-                      ObjectEditorTabType type = tabs[i];
-                      Widget child = objectEditorTabTypeToWidget(type);
-                      bool preview = objectEditorTabTypeContent(context, type, widget.root) is ObjectEditorPreview;
+                      var child = tabs[i];
+                      bool preview = child is ObjectEditorPreview;
                   
                       return Center(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            child,
+                            objectEditorTabTypeToWidget(child.type),
                             if (preview) ...[
                               SizedBox(width: 8),
                               IconButton(onPressed: () {
-                                if (tabs.indexOf(type) == controller!.index) navigate(controller!.index - 1);
-                                tabs.remove(type);
+                                if (tabs.indexOf(child) == controller!.index) navigate(controller!.index - 1);
+                                tabs.remove(child);
                                 initTabController();
                                 setState(() {});
                               }, icon: Icon(Icons.cancel_outlined)),
@@ -162,7 +170,8 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
                   ];
                 }, onSelected: (value) {
                   if (value is DataType) {
-                    tabs.add(dataTypeToObjectEditorTabType(value));
+                    var type = dataTypeToObjectEditorTabType(value);
+                    tabs.add((type: type, content: objectEditorTabTypeContent(context, type, root)));
                     initTabController();
                     setState(() {});
                     navigate(tabs.length - 1);
@@ -175,10 +184,10 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
       ),
       body: TabBarView(physics: NeverScrollableScrollPhysics(), controller: controller, children: [
         ...List.generate(tabs.length, (i) {
-          ObjectEditorTabType type = tabs[i];
+          var child = tabs[i];
       
           return Center(
-            child: objectEditorTabTypeContent(context, type, widget.root),
+            child: child.content,
           );
         }),
       ]),
@@ -191,6 +200,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
       case ObjectEditorTabType.json: return Text("JSON");
       case ObjectEditorTabType.yaml: return Text("YAML");
       case ObjectEditorTabType.plist: return Text("PList");
+      case ObjectEditorTabType.xml: return Text("XML");
       case ObjectEditorTabType.settings: return Icon(Icons.settings);
     }
   }
@@ -200,6 +210,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
       case ObjectEditorTabType.json: return DataType.json;
       case ObjectEditorTabType.yaml: return DataType.yaml;
       case ObjectEditorTabType.plist: return DataType.plist;
+      case ObjectEditorTabType.xml: return DataType.xml;
       default: return null;
     }
   }
@@ -208,19 +219,22 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
     RootNode.assignInstance(widget.root);
     
     switch (objectEditorTabType) {
-      case ObjectEditorTabType.base: return ObjectEditorDesktop();
-      case ObjectEditorTabType.settings: return ObjectEditorSettings();
+      case ObjectEditorTabType.base: return ObjectEditorDesktop(key: ValueKey('tab.base'));
+      case ObjectEditorTabType.settings: return ObjectEditorSettings(key: ValueKey('tab.settings'));
 
       default: 
         DataType? type = objectEditorTabTypeToObjectType(objectEditorTabType);
         if (type == null) throw Exception("Invalid editor type: $objectEditorTabType");
-        return ObjectEditorPreview(type: type, root: root);
+        return ObjectEditorPreview(type: type, root: root, key: ValueKey("tab.${type.name}"));
     }
   }
 
   bool isObjectEditorTabTypePreview(ObjectEditorTabType objectEditorTabType) {
     return objectEditorTabType == ObjectEditorTabType.json || objectEditorTabType == ObjectEditorTabType.yaml || objectEditorTabType == ObjectEditorTabType.plist;
   }
+  
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class ObjectEditorSettings extends StatefulWidget {

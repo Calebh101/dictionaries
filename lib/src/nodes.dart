@@ -31,7 +31,6 @@ Object? getDefaultValue(NodeType type) {
     case NodeType.map: return {};
     case NodeType.date: return DateTime.fromMillisecondsSinceEpoch(0);
     case NodeType.data: return Uint8List(0);
-    case NodeType.dynamic: return null;
   }
 }
 
@@ -45,7 +44,6 @@ String nodeTypeToString(NodeType type) {
     case NodeType.map: return "Dictionary";
     case NodeType.date: return "Date";
     case NodeType.data: return "Data";
-    case NodeType.dynamic: return "Custom";
   }
 }
 
@@ -86,13 +84,14 @@ abstract class NodeData {
 class Node extends NodeData {
   Object? input;
   List<NodeAttribute> attributes;
+  XmlName? name;
 
   /// - 0: Not parent
   /// - 1: Array
   /// - 2: Map
   int isParentType;
 
-  Node({required this.input, super.children = const [], this.attributes = const [], this.isRoot = false, this.isParentType = 0});
+  Node({required this.input, super.children = const [], this.attributes = const [], this.isRoot = false, this.isParentType = 0, this.name});
 
   @override
   bool isRoot;
@@ -103,12 +102,17 @@ class Node extends NodeData {
   NodeType get type => _identify();
   NodeType identify({bool debug = false}) => _identify(debug: debug);
   bool get hasChildren => children.isNotEmpty;
+  bool get isDecimal => input is double;
 
   List<int> attributesToBinary() {
     List<int> bytes = [];
     for (NodeAttribute attribute in attributes) bytes.addAll([...utf8.encode(attribute.name), 0x00, ...utf8.encode(attribute.value), 0x00]);
     ByteData length = ByteData(8)..setUint64Safe(0, bytes.length, IntParser.defaultEndian);
     return [...length.buffer.asUint8List(), ...bytes];
+  }
+
+  List<XmlAttribute> attributesToXml() {
+    return attributes.map((x) => XmlAttribute(XmlName(x.name), x.value)).toList();
   }
 
   static Object? toJson(NodeData input, NodeConversionMode mode) {
@@ -124,8 +128,6 @@ class Node extends NodeData {
           return input.input as num;
         } else if (type == NodeType.boolean) {
           return input.input == true;
-        } else if (type == NodeType.dynamic) {
-          return input.input;
         } else if (type == NodeType.date) {
           return switch (mode) {
             NodeConversionMode.json => (input.input as DateTime).toIso8601String(),
@@ -156,9 +158,7 @@ class Node extends NodeData {
   NodeType _identify({bool debug = false}) {
     if (debug) Logger.print('Node $id debug: type=${input.runtimeType} children=$children (${children.runtimeType}) isEmpty=${children.isEmpty}');
 
-    if (input is Uint8List) {
-      return NodeType.data;
-    } else if (isParentType == 1) {
+    if (isParentType == 1) {
       return NodeType.array;
     } else if (isParentType == 2) {
       return NodeType.map;
@@ -174,8 +174,6 @@ class Node extends NodeData {
       return NodeType.date;
     } else if (input is Uint8List) {
       return NodeType.data;
-    } else if (input is CustomNode) {
-      return NodeType.dynamic;
     } else {
       throw UnimplementedError();
     }
@@ -186,12 +184,11 @@ class Node extends NodeData {
       case NodeType.map:
       case NodeType.array: return "${children.length} Children";
       case NodeType.boolean: return (input as bool) ? "True" : "False";
-      case NodeType.data: return "0x${(input as Uint8List).map((b) => b.toRadixString(16).padLeft(2, '0')).join("")}";
+      case NodeType.data: return "0x${(input as Uint8List).formatBytes()}";
       case NodeType.date: return DateFormat("MMM d, y h:mm a").format(input as DateTime);
       case NodeType.empty: return "Null";
       case NodeType.number: return input.toString();
       case NodeType.string: return input.toString();
-      case NodeType.dynamic: return input.toString();
     }
   }
 }
@@ -213,16 +210,37 @@ class NodeKeyValuePair extends NodeData {
   Node get node => value;
 }
 
+class ProcessingInstruction {
+  final String target;
+  final Object text;
+
+  const ProcessingInstruction(this.target, this.text);
+
+  XmlBuilder apply(XmlBuilder document) {
+    return document..processing(target, text);
+  }
+}
+
+class Processing {
+  final List<ProcessingInstruction> instructions;
+  final String root;
+  final List<XmlAttribute> attributes;
+
+  const Processing({required this.instructions, required this.root, required this.attributes});
+  static const standard = Processing(instructions: [ProcessingInstruction("xml", 'version="1.0" encoding="UTF-8"')], root: "xml", attributes: []);
+}
+
 class RootNode {
   List<NodeData> children;
   RootNodeType type;
+  Processing processing;
   Map<String, NodeData> _lookup = {};
 
-  RootNode({required this.children, required this.type}) {
+  RootNode({required this.children, required this.type, this.processing = Processing.standard}) {
     rebuild();
   }
 
-  RootNode.clean({required this.type}) : children = const [] {
+  RootNode.clean({required this.type, this.processing = Processing.standard}) : children = const [] {
     rebuild();
   }
 
@@ -247,7 +265,8 @@ class RootNode {
 
   Object? _toJson(NodeConversionMode mode) => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => Node.toJson(x, mode));
   Object? toJson() => _toJson(NodeConversionMode.json);
-  XmlDocument toPlist({bool showNull = false}) => _toPlist(_toJson(NodeConversionMode.plist));
+  XmlDocument toPlist({bool showNull = false}) => _toPlist(_toJson(NodeConversionMode.plist), showNull);
+  XmlDocument toXml({bool showNull = true}) => _toXml(showNull);
 
   String toJsonString() {
     JsonEncoder encoder = JsonEncoder.withIndent('  ');
@@ -259,7 +278,11 @@ class RootNode {
   }
 
   String toPlistString({bool showNull = false, bool pretty = true, String indent = '  '}) {
-    return _toPlist(toJson(), showNull: showNull).toXmlString(pretty: pretty, indent: indent);
+    return _toPlist(toJson(), showNull).toXmlString(pretty: pretty, indent: indent);
+  }
+
+  String toXmlString({bool showNull = true, bool pretty = true, String indent = '  '}) {
+    return _toXml(showNull).toXmlString(pretty: pretty, indent: indent);
   }
 
   Uint8List toBinary() {
@@ -310,7 +333,7 @@ class RootNode {
     }
   }
 
-  static XmlDocument _toPlist(Object? input, {bool showNull = false}) {
+  static XmlDocument _toPlist(Object? input, bool showNull) {
     XmlNode? process(Object? value) {
       if (value == null) {
         return showNull ? XmlElement(XmlName("null")) : null;
@@ -359,9 +382,79 @@ class RootNode {
     return document;
   }
 
+  XmlDocument _toXml(bool showNull) {
+    XmlBuilder builder = XmlBuilder();
+    for (var i in processing.instructions) i.apply(builder);
+
+    builder.element(processing.root, nest: () {
+      for (var attribute in processing.attributes) {
+        builder.attribute(attribute.localName, attribute.value, namespace: attribute.namespacePrefix, attributeType: attribute.attributeType);
+      }
+    });
+
+    XmlElement create(Node data, String defaultName, XmlText? value, [Iterable<XmlElement>? children]) {
+      List<XmlNode> _children = children?.toList() ?? [];
+      if (value != null) _children = [value];
+      return XmlElement(data.name ?? XmlName(defaultName), data.attributesToXml(), _children);
+    }
+
+    String Function(Uint8List) storeData = ((Uint8List input) {
+      return base64Encode(input);
+    });
+
+    String Function(DateTime) storeDate = ((DateTime input) {
+      return input.toIso8601String();
+    });
+
+    XmlNode? process(NodeData data) {
+      if (data is Node) {
+        switch (data.type) {
+          case NodeType.map:
+          case NodeType.array:
+            return create(data, data.type == NodeType.map ? "dictionary" : "array", null, data.children.map((x) => process(x)).whereType());
+
+          case NodeType.boolean:
+            return create(data, "bool", XmlText(data.input == true ? "true" : "false"));
+
+          case NodeType.data:
+            return create(data, "data", XmlText(storeData(data.input as Uint8List)));
+
+          case NodeType.date:
+            // In the middle of coding this block, I figured out what Dart records are.
+            // Up to this point, I have been torturing myself, thinking I had to return a Map or something like that to use multiple values.
+            // I was very wrong.
+            return create(data, "date", XmlText(storeDate(data.input as DateTime)));
+
+          case NodeType.empty:
+            if (showNull) {
+              return create(data, "null", null);
+            } else {
+              return null;
+            }
+
+          case NodeType.number:
+            return create(data, data.isDecimal ? "float" : "int", XmlText(data.input.toString()));
+
+          case NodeType.string:
+            return create(data, "string", XmlText(data.input as String));
+        }
+      } else if (data is NodeKeyValuePair) {
+        data.node.name ??= XmlName(data.key);
+        return process(data.node);
+      } else {
+        Logger.warn("Invalid type: ${data.node}");
+        return null;
+      }
+    }
+
+    XmlDocument document = builder.buildDocument();
+    document.rootElement.children.addAll(children.map((x) => process(x)).whereType());
+    return document;
+  }
+
   static RootNode fromObject(Object? input) {
     Node process(Object? input, [int index = -1]) {
-      if (input is List) {
+      if (input is List && input is! Uint8List) {
         return Node(isParentType: 1, input: null, children: input.map((value) {
           index++;
           return process(value, index);
@@ -417,7 +510,41 @@ class RootNode {
   }
 
   static RootNode fromXml(String input) {
-    throw UnimplementedError();
+    List<Object? Function(XmlElement)> parseItemFunctions = [
+      (x) => bool.parse(x.innerText),
+      (x) => int.parse(x.innerText),
+      (x) => double.parse(x.innerText),
+      (x) => DateTime.parse(x.innerText),
+      (x) => base64.decode(x.innerText),
+      (x) => x.innerText.isEmpty ? null : throw Exception(),
+    ];
+
+    NodeData? process(XmlNode element) {
+      if (element is XmlElement) {
+        Object? result = element.innerText;
+
+        for (var function in parseItemFunctions) {
+          try {
+            result = function.call(element);
+          } catch (_) {}
+        }
+
+        return Node(input: result, attributes: element.attributes.map((x) => NodeAttribute(x.qualifiedName, x.value)).toList());
+      } else {
+        return Node(input: null, attributes: element.attributes.map((x) => NodeAttribute(x.qualifiedName, x.value)).toList(), children: element.children.map((x) => process(x)).whereType<NodeData>().toList());
+      }
+    }
+
+    final document = XmlDocument.parse(input);
+    List<NodeData> children = [];
+
+    for (var element in document.root.children) {
+      var value = process(element);
+      if (value != null) children.add(value);
+    }
+
+    RootNode node = RootNode(children: children, type: RootNodeType.array, processing: Processing(instructions: document.descendants.whereType<XmlProcessing>().map((x) => ProcessingInstruction(x.target, x.innerText)).toList(), root: document.rootElement.name.qualified, attributes: document.rootElement.attributes));
+    return node;
   }
 
   static RootNode? tryParse(Uint8List raw) {
@@ -448,17 +575,6 @@ class RootNode {
 
   static void assignInstance(RootNode value) {
     instance = value;
-  }
-}
-
-class CustomNode {
-  String key;
-  String value;
-
-  CustomNode(this.key, this.value);
-
-  Uint8List toBinary() {
-    return Uint8List.fromList([...utf8.encode(key), 0x00, ...utf8.encode(value), 0x00]);
   }
 }
 
@@ -509,8 +625,6 @@ class NodeBinaryManager {
         List<int> bytes = [];
         for (List<int> child in node.children.map((x) => nodeDataToBinary(x))) bytes.addAll(child);
         return bytes;
-      case NodeType.dynamic:
-        return (node.input as CustomNode).toBinary();
     }
   }
 
@@ -532,25 +646,6 @@ class NodeBinaryManager {
       case NodeType.string:
         String text = utf8.decode(content, allowMalformed: true);
         return Node(input: text);
-      case NodeType.dynamic:
-        int offset = 0;
-        String key = "";
-        String value = "";
-
-        while (content[offset] != 0) {
-          key += utf8.decode([content[offset]]);
-          offset++;
-        }
-
-        offset++;
-
-        while (content[offset] != 0) {
-          value += utf8.decode([content[offset]]);
-          offset++;
-        }
-
-        CustomNode data = CustomNode(key, value);
-        return Node(input: data);
       case NodeType.map:
       case NodeType.array:
         Logger.verbose("Found node $type of ${content.length} bytes");

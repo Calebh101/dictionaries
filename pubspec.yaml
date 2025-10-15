@@ -1,7 +1,7 @@
 name: dictionaries
-description: "A new Flutter project."
+description: "Dictionaries"
 publish_to: 'none'
-version: 0.1.0
+version: 0.0.0
 
 environment:
   sdk: ^3.9.2
@@ -13,7 +13,7 @@ dependencies:
   localpkg:
     git:
       url: https://github.com/Calebh101/localpkg-flutter-2.git
-      ref: 6e0019fc2e0a8f890706b91f1832e6c6a06f75e3
+      ref: ef5c53e4c92ed8e3bc655e4d0ccbd454eac31d3b
 
   file_picker: ^10.3.3
   file_saver: ^0.3.1
@@ -24,7 +24,6 @@ dependencies:
   intl: ^0.20.2
   json2yaml: ^3.0.1
   linked_scroll_controller: ^0.2.0
-
   mahop_data_table: ^1.0.6
   menu_bar: ^0.5.3
   plist_parser: ^0.2.5
@@ -42,6 +41,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
   flutter_lints: ^5.0.0
 
 flutter:

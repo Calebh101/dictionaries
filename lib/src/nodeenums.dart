@@ -7,7 +7,6 @@ enum NodeType {
   map,
   date,
   data,
-  dynamic,
 }
 
 enum RootNodeType {
