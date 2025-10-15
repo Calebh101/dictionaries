@@ -1,6 +1,8 @@
+import 'package:any_date/any_date.dart';
 import 'package:dictionaries/main.dart';
 import 'package:dictionaries/src/nodeenums.dart';
 import 'package:dictionaries/src/nodes.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:localpkg/dialogue.dart';
@@ -179,6 +181,44 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                         double width2 = 100;
                         double width3 = maxWidth * 0.3;
                         double width1 = constraints.maxWidth - width2 - width3;
+
+                        SelectableText(data.node.valueToString(), textAlign: TextAlign.center);
+
+                        Widget valueChild = TextFormField(
+                          initialValue: data.node.valueToString(),
+                          onChanged: (source) {
+                            Object? get() {
+                              switch (data.node.type) {
+                                case NodeType.string: return source;
+                                case NodeType.number: return int.tryParse(source) ?? double.tryParse(source);
+                                case NodeType.boolean: return double.tryParse(source);
+                                case NodeType.date: return AnyDate().tryParse(source);
+
+                                case NodeType.data:
+                                  source = source.trim().replaceAll(RegExp("0x", caseSensitive: false), "").replaceAll(RegExp("[^a-zA-Z0-9]"), "").toUpperCase();
+                                  if (RegExp("[^A-Fa-f0-9]").hasMatch(source)) return null;
+                                  int i = 0;
+                                  List<int> bytes = [];
+
+                                  while (i < source.length) {
+                                    if (i + 2 > source.length) return null;
+                                    String byte = source.substring(i, i + 2);
+                                    int? value = int.tryParse(byte);
+                                    if (value != null) bytes.add(value);
+                                  }
+
+                                  return Uint8List.fromList(bytes);
+
+                                default: return null;
+                              }
+                            }
+
+                            var value = get();
+                            if (value == null) return SnackBarManager.show(context, "Invalid value.").toVoid();
+                            data.node.input = value;
+                            setState(() {});
+                          },
+                        );
       
                         return TreeRowContainer(
                           child: Row(
@@ -190,7 +230,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                               ),
                               SizedBox(
                                 width: width3,
-                                child: data.node.input != null ? SelectableText(data.node.valueToString(), textAlign: TextAlign.center) : SizedBox.shrink(),
+                                child: data.node.input != null ? valueChild : SizedBox.shrink(),
                               ),
                               SizedBox(
                                 width: width2,
