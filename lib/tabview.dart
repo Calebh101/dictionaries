@@ -65,6 +65,7 @@ class _UserFocusedTabViewState<T> extends State<UserFocusedTabView> {
 
     _onTabRemovedControllerSubscription = widget.controller._onTabRemovedController.stream.listen((i) {
       widget.controller.tabs.removeAt(i);
+      if (currentTab >= i) widget.controller.setCurrentTab(i - 1);
       setState(() {});
     });
 
@@ -81,36 +82,58 @@ class _UserFocusedTabViewState<T> extends State<UserFocusedTabView> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: List.generate(widget.controller.tabs.length, (i) {
+    return SizedBox(
+      height: 50,
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        buildDefaultDragHandles: false,
+        scrollDirection: Axis.horizontal,
+        itemCount: widget.controller.tabs.length,
+        onReorder: (oldIndex, newIndex) {
+          var tabs = widget.controller.tabs;
+          if (widget.reorderable == false || tabs[oldIndex].reorderable == false || (tabs.elementAtOrNull(newIndex) ?? tabs.elementAt(newIndex - 1)).reorderable == false) return;
+
+          var tab = tabs.removeAt(oldIndex);
+          if (newIndex > oldIndex) newIndex -= 1;
+          tabs.insert(newIndex, tab);
+          widget.controller.setCurrentTab(newIndex);
+          setState(() {});
+        },
+        itemBuilder: ((context, i) {
           UserFocusedTab tab = widget.controller.tabs[i];
           Radius radius = widget.borderRadius == null ? Radius.zero : Radius.circular(widget.borderRadius!);
-
-          return Container(
+  
+          Widget child = Container(
+            key: Key("tab.container.${tab.hashCode}"),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.only(topLeft: radius, topRight: radius),
               color: currentTab == i ? (Theme.of(context).brightness == Brightness.light ? Colors.grey : const Color.fromARGB(255, 53, 60, 80)) : Colors.transparent,
             ),
             child: InkWell(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    tab.thumbnail,
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: tab.thumbnail,
+                    ),
                     if (tab.showCloseButton)
-                    IconButton(onPressed: () => widget.controller.removeTab(i), icon: Icon(Icons.cancel)),
+                    IconButton(onPressed: () => widget.controller.removeTab(i), icon: Icon(Icons.cancel_outlined), iconSize: 20),
                   ],
                 ),
               ),
               onTap: () => widget.controller.setCurrentTab(i),
             ),
           );
+
+          if (widget.reorderable && tab.reorderable) {
+            return ReorderableDragStartListener(child: child, index: i, key: Key("tab.listener.${tab.hashCode}"));
+          } else {
+            return child;
+          }
         }),
       ),
     );

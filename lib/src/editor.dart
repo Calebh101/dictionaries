@@ -24,6 +24,7 @@ class ObjectEditorDesktop extends StatefulWidget {
 class _ObjectEditorState extends State<ObjectEditorDesktop> {
   late final TreeController<NodeData> controller;
   ScrollController scrollController1 = ScrollController();
+  Map<String, ({TextEditingController controller, GlobalKey key})> formControllers = {};
 
   @override
   void initState() {
@@ -141,6 +142,10 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
         NodeData data = entry.node;
         String title = "Unknown";
+
+        if (!formControllers.containsKey(data.id)) {
+          formControllers[data.id] = (controller: TextEditingController(text: data.node.valueToString()), key: GlobalKey());
+        }
       
         if (data is Node) {
           title = data.index.toString();
@@ -182,42 +187,65 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                         double width3 = maxWidth * 0.3;
                         double width1 = constraints.maxWidth - width2 - width3;
 
-                        SelectableText(data.node.valueToString(), textAlign: TextAlign.center);
-
-                        Widget valueChild = TextFormField(
-                          initialValue: data.node.valueToString(),
-                          onChanged: (source) {
-                            Object? get() {
-                              switch (data.node.type) {
-                                case NodeType.string: return source;
-                                case NodeType.number: return int.tryParse(source) ?? double.tryParse(source);
-                                case NodeType.boolean: return double.tryParse(source);
-                                case NodeType.date: return AnyDate().tryParse(source);
-
-                                case NodeType.data:
-                                  source = source.trim().replaceAll(RegExp("0x", caseSensitive: false), "").replaceAll(RegExp("[^a-zA-Z0-9]"), "").toUpperCase();
-                                  if (RegExp("[^A-Fa-f0-9]").hasMatch(source)) return null;
-                                  int i = 0;
-                                  List<int> bytes = [];
-
-                                  while (i < source.length) {
-                                    if (i + 2 > source.length) return null;
-                                    String byte = source.substring(i, i + 2);
-                                    int? value = int.tryParse(byte);
-                                    if (value != null) bytes.add(value);
-                                  }
-
-                                  return Uint8List.fromList(bytes);
-
-                                default: return null;
+                        Object? get(String source) {
+                          switch (data.node.type) {
+                            case NodeType.string: return source;
+                            case NodeType.number: return int.tryParse(source) ?? double.tryParse(source);
+                            case NodeType.boolean: return bool.tryParse(source);
+                            case NodeType.date: return AnyDate().tryParse(source);
+                    
+                            case NodeType.data:
+                              source = source.trim().replaceAll(RegExp("0x", caseSensitive: false), "").replaceAll(RegExp("[^a-zA-Z0-9]"), "").toUpperCase();
+                              if (RegExp("[^A-F0-9]").hasMatch(source)) return null;
+                              if (source.length % 2 != 0) source = "0$source";
+                    
+                              int i = 0;
+                              List<int> bytes = [];
+                    
+                              while (i < source.length) {
+                                if (i + 2 > source.length) return null;
+                                String byte = source.substring(i, i + 2);
+                                int? value = int.tryParse(byte, radix: 16);
+                                if (value != null) bytes.add(value);
+                                i += 2;
                               }
-                            }
+                    
+                              return Uint8List.fromList(bytes);
+                    
+                            default: return null;
+                          }
+                        }
 
-                            var value = get();
-                            if (value == null) return SnackBarManager.show(context, "Invalid value.").toVoid();
-                            data.node.input = value;
-                            setState(() {});
-                          },
+                        Widget valueChild = data.node.type == NodeType.boolean ? DropdownButton<bool>(isDense: true, value: data.node.input as bool, items: [
+                          DropdownMenuItem(child: Text("True"), value: true),
+                          DropdownMenuItem(child: Text("False"), value: false),
+                        ], onChanged: (value) {
+                          if (value == null) return;
+                          data.node.input = value;
+                          setState(() {});
+                        }) : Form(
+                          key: formControllers[data.id]!.key,
+                          child: TextFormField(
+                            controller: formControllers[data.id]!.controller,
+                            decoration: InputDecoration(
+                              isDense: true,
+                            ),
+                            onChanged: (value) {
+                              (formControllers[data.id]!.key.currentState as FormState).validate();
+                            },
+                            onEditingComplete: () {
+                              String source = formControllers[data.id]!.controller.text;
+                              var value = get(source);
+                              if (value == null) return;
+                              data.node.input = value;
+                              setState(() {});
+                            },
+                            validator: (value) {
+                              if (value == null) return "Value cannot be empty.";
+                              if (get(value) == null) return "Value is invalid.";
+                              return null;
+                            },
+                          ),
                         );
       
                         return TreeRowContainer(

@@ -184,7 +184,7 @@ class Node extends NodeData {
       case NodeType.map:
       case NodeType.array: return "${children.length} Children";
       case NodeType.boolean: return (input as bool) ? "True" : "False";
-      case NodeType.data: return "0x${(input as Uint8List).formatBytes()}";
+      case NodeType.data: return (input as Uint8List).formatHex();
       case NodeType.date: return DateFormat("MMM d, y h:mm a").format(input as DateTime);
       case NodeType.empty: return "Null";
       case NodeType.number: return input.toString();

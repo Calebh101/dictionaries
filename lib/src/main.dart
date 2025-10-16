@@ -73,7 +73,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
   @override
   void initState() {
     root = widget.root;
-    tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings].map((x) => UserFocusedTab<ObjectEditorTabType>(attachment: x, child: objectEditorTabTypeContent(context, x, root), thumbnail: objectEditorTabTypeToWidget(x))).toList();
+    tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings].map((x) => UserFocusedTab<ObjectEditorTabType>(attachment: x, child: objectEditorTabTypeContent(context, x, root), thumbnail: objectEditorTabTypeToWidget(x), reorderable: false)).toList();
     controller = UserFocusedTabViewController(tabs);
     super.initState();
   }
@@ -111,7 +111,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
                 }, onSelected: (value) {
                   if (value is DataType) {
                     var type = dataTypeToObjectEditorTabType(value);
-                    controller!.addTab(UserFocusedTab(child: objectEditorTabTypeContent(context, type, root), thumbnail: objectEditorTabTypeToWidget(type), attachment: type));
+                    controller!.addTab(UserFocusedTab(child: objectEditorTabTypeContent(context, type, root), thumbnail: objectEditorTabTypeToWidget(type), attachment: type, showCloseButton: true));
                   }
                 }),
               ),
