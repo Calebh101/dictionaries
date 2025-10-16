@@ -8,7 +8,6 @@ enum DataType {
   json,
   yaml,
   plist,
-  xml,
 }
 
 enum ObjectEditorTabType {
@@ -16,7 +15,6 @@ enum ObjectEditorTabType {
   json,
   yaml,
   plist,
-  xml,
   settings,
 }
 
@@ -25,7 +23,6 @@ String dataTypeToLanguage(DataType input) {
     case DataType.json: return "json";
     case DataType.yaml: return "yaml";
     case DataType.plist: return "xml";
-    case DataType.xml: return "xml";
   }
 }
 
@@ -34,7 +31,6 @@ String dataTypeToPrettyString(DataType input) {
     case DataType.json: return "JSON";
     case DataType.yaml: return "YAML";
     case DataType.plist: return "PList";
-    case DataType.xml: return "XML";
   }
 }
 
@@ -43,7 +39,6 @@ ObjectEditorTabType dataTypeToObjectEditorTabType(DataType input) {
     case DataType.json: return ObjectEditorTabType.json;
     case DataType.yaml: return ObjectEditorTabType.yaml;
     case DataType.plist: return ObjectEditorTabType.plist;
-    case DataType.xml: return ObjectEditorTabType.xml;
   }
 }
 
@@ -52,7 +47,6 @@ String? compileByType(DataType type, RootNode root) {
     case DataType.json: return root.toJsonString();
     case DataType.yaml: return root.toYamlString();
     case DataType.plist: return root.toPlistString();
-    case DataType.xml: return root.toXmlString();
   }
 }
 
@@ -84,6 +78,11 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
 
     return Scaffold(
       appBar: AppBar(
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        excludeHeaderSemantics: true,
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color.fromARGB(255, 18, 23, 25) : Colors.white,
         title: Text(["Dictionaries"].join(" - ")),
         centerTitle: true,
         bottom: PreferredSize(
@@ -129,7 +128,6 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
       case ObjectEditorTabType.json: return Text("JSON");
       case ObjectEditorTabType.yaml: return Text("YAML");
       case ObjectEditorTabType.plist: return Text("PList");
-      case ObjectEditorTabType.xml: return Text("XML");
       case ObjectEditorTabType.settings: return Icon(Icons.settings);
     }
   }
@@ -139,7 +137,6 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
       case ObjectEditorTabType.json: return DataType.json;
       case ObjectEditorTabType.yaml: return DataType.yaml;
       case ObjectEditorTabType.plist: return DataType.plist;
-      case ObjectEditorTabType.xml: return DataType.xml;
       default: return null;
     }
   }

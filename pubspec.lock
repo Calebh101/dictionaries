@@ -166,6 +166,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_context_menu:
+    dependency: "direct main"
+    description:
+      name: flutter_context_menu
+      sha256: "79fe00cd7e3ac3840a552cb3e653d8eb61d827b6c04c559e219973a1dc769165"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
   flutter_environments_plus:
     dependency: "direct main"
     description:
@@ -300,8 +308,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "839fc95e889b72a1ecb82a1b3a051085bcf72c39"
-      resolved-ref: "839fc95e889b72a1ecb82a1b3a051085bcf72c39"
+      ref: "4176d9adc189ce6ee5fd3b072efa12c38e040443"
+      resolved-ref: "4176d9adc189ce6ee5fd3b072efa12c38e040443"
       url: "https://github.com/Calebh101/localpkg-flutter-2.git"
     source: git
     version: "2.0.0"

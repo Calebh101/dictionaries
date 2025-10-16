@@ -4,6 +4,7 @@ import 'package:dictionaries/src/nodeenums.dart';
 import 'package:dictionaries/src/nodes.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_context_menu/flutter_context_menu.dart' as cm;
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:localpkg/dialogue.dart';
 import 'package:localpkg/functions.dart';
@@ -25,6 +26,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
   late final TreeController<NodeData> controller;
   ScrollController scrollController1 = ScrollController();
   Map<String, ({TextEditingController controller, GlobalKey key})> formControllers = {};
+  Map<String, ({TextEditingController controller, GlobalKey key})> keyControllers = {};
 
   @override
   void initState() {
@@ -75,66 +77,80 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
           Node node = entry.node as Node;
           RootNode root = node.input as RootNode;
 
-          return InkWell(
-            child: Padding(
-              padding: const EdgeInsets.all(0),
-              child: TreeIndentation(
-                child: Row(
-                  children: [
-                    ExpandIcon(
-                      size: 24,
-                      isExpanded: entry.isExpanded,
-                      onPressed: (value) => controller.toggleExpansion(node),
-                    ),
-                    SizedBox(
-                      width: 40,
-                      height: 32,
-                    ),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          double maxWidth = MediaQuery.of(context).size.width;
-                          double width2 = 100;
-                          double width3 = maxWidth * 0.3;
-                          double width1 = constraints.maxWidth - width2 - width3;
-        
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              SizedBox(
-                                width: width1,
-                                child: SelectableText("Root", textAlign: TextAlign.left),
-                              ),
-                              SizedBox(
-                                width: width3,
-                                child: Text("${node.children.length} Children"),
-                              ),
-                              SizedBox(
-                                width: width2,
-                                child: DropdownButton<RootNodeType>(items: RootNodeType.values.map((type) {
-                                  return DropdownMenuItem<RootNodeType>(
-                                    alignment: AlignmentGeometry.center,
-                                    value: type,
-                                    child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
-                                  );
-                                }).toList(), onChanged: (value) {
-                                  if (value == null) return;
-                                  refresh(tree: true);
-                                }, value: root.type),
-                              ),
-                            ],
-                          );
-                        }
+          List<cm.ContextMenuEntry> contextMenuEntries = [
+            cm.MenuItem(label: "New Child", icon: Icons.add, onSelected: () {
+              Node node = Node(input: "New String");
+              NodeData data = root.type == RootNodeType.map ? NodeKeyValuePair(key: "New String", value: node) : node;
+              Logger.print("Adding child ${data.runtimeType}... (currently ${entry.node.children.length} children)");
+              entry.node.children.add(data);
+              refresh(tree: true);
+              Logger.print("Added child ${data.runtimeType} (currently ${entry.node.children.length} children)");
+            }),
+          ];
+
+          return cm.ContextMenuRegion(
+            contextMenu: cm.ContextMenu(entries: contextMenuEntries, padding: EdgeInsets.all(8)),
+            child: InkWell(
+              child: Padding(
+                padding: const EdgeInsets.all(0),
+                child: TreeIndentation(
+                  child: Row(
+                    children: [
+                      ExpandIcon(
+                        size: 24,
+                        isExpanded: entry.isExpanded,
+                        onPressed: (value) => controller.toggleExpansion(node),
                       ),
-                    ),
-                  ],
+                      SizedBox(
+                        width: 40,
+                        height: 32,
+                      ),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            double maxWidth = MediaQuery.of(context).size.width;
+                            double width2 = 100;
+                            double width3 = maxWidth * 0.3;
+                            double width1 = constraints.maxWidth - width2 - width3;
+                    
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                SizedBox(
+                                  width: width1,
+                                  child: SelectableText("Root", textAlign: TextAlign.left),
+                                ),
+                                SizedBox(
+                                  width: width3,
+                                  child: Text("${node.children.length} Children"),
+                                ),
+                                SizedBox(
+                                  width: width2,
+                                  child: DropdownButton<RootNodeType>(items: RootNodeType.values.map((type) {
+                                    return DropdownMenuItem<RootNodeType>(
+                                      alignment: AlignmentGeometry.center,
+                                      value: type,
+                                      child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
+                                    );
+                                  }).toList(), onChanged: (value) {
+                                    if (value == null) return;
+                                    refresh(tree: true);
+                                  }, value: root.type),
+                                ),
+                              ],
+                            );
+                          }
+                        ),
+                      ),
+                    ],
+                  ),
+                  guide: IndentGuide.connectingLines(
+                    indent: 24,
+                    thickness: 1,
+                    color: Colors.grey,
+                  ),
+                  entry: entry,
                 ),
-                guide: IndentGuide.connectingLines(
-                  indent: 24,
-                  thickness: 1,
-                  color: Colors.grey,
-                ),
-                entry: entry,
               ),
             ),
           );
@@ -142,6 +158,8 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
         NodeData data = entry.node;
         String title = "Unknown";
+        bool hasKey = false;
+        Widget? keyWidget;
 
         if (!formControllers.containsKey(data.id)) {
           formControllers[data.id] = (controller: TextEditingController(text: data.node.valueToString()), key: GlobalKey());
@@ -152,7 +170,39 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
         }
       
         if (data is NodeKeyValuePair) {
+          hasKey = true;
           title = data.key;
+        }
+
+        if (hasKey) {
+          NodeKeyValuePair nkvp = data as NodeKeyValuePair;
+          if (!keyControllers.containsKey(data.id)) keyControllers[data.id] = (controller: TextEditingController(text: nkvp.key), key: GlobalKey());
+
+          keyWidget = Form(
+            key: keyControllers[data.id]!.key,
+            child: TextFormField(
+              controller: keyControllers[data.id]!.controller,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+              ),
+              onChanged: (value) {
+                (keyControllers[data.id]!.key.currentState as FormState).save();
+              },
+              onSaved: (source) {
+                if (source == null) return;
+                bool result = (keyControllers[data.id]!.key.currentState as FormState).validate();
+                if (result == false) return;
+                Logger.print("Setting key...");
+                nkvp.key = source;
+                setState(() {});
+              },
+              validator: (value) {
+                if (value == null) return "Value cannot be empty.";
+                return null;
+              },
+            ),
+          );
         }
 
         if (data.node.type == NodeType.map || data.node.type == NodeType.array) {
@@ -229,14 +279,20 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                             controller: formControllers[data.id]!.controller,
                             decoration: InputDecoration(
                               isDense: true,
+                              border: InputBorder.none,
                             ),
                             onChanged: (value) {
-                              (formControllers[data.id]!.key.currentState as FormState).validate();
+                              (formControllers[data.id]!.key.currentState as FormState).save();
                             },
-                            onEditingComplete: () {
-                              String source = formControllers[data.id]!.controller.text;
+                            onSaved: (source) {
+                              if (source == null) return;
+                              bool result = (keyControllers[data.id]!.key.currentState as FormState).validate();
+                              if (result == false) return;
+
                               var value = get(source);
                               if (value == null) return;
+
+                              Logger.print("Setting value...");
                               data.node.input = value;
                               setState(() {});
                             },
@@ -247,14 +303,14 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                             },
                           ),
                         );
-      
+
                         return TreeRowContainer(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               SizedBox(
                                 width: width1,
-                                child: SelectableText(title, textAlign: TextAlign.left),
+                                child: keyWidget ?? SelectableText(title, textAlign: TextAlign.left),
                               ),
                               SizedBox(
                                 width: width3,

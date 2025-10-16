@@ -127,7 +127,7 @@ class _HomeState extends State<Home> {
                   Logger.print("Activated button of type ${child.runtimeType}: ${child.text}");
 
                   if (child is HomeOption) {
-                    print("Starting function ${child.id}...");
+                    Logger.print("Starting function ${child.id}...");
                     child.onActivate.call();
                   } else if (child is HomeMenu) {
                     var result = await showMenu<int>(context: context, positionBuilder: (context, constraints) {
