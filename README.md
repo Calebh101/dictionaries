@@ -43,7 +43,6 @@ Here's how the rest are parsed:
 - Empty: Literally nothing
 - Date: Stored as 64-bit unsigned integer representing milliseconds since epoch
 - Data: Read as raw bytes
-- Dynamic: Stored as CustomNode, which is a null-terminated string as the key, then a null-terminated string as the value.
 
 #### Node Key Value Pairs
 
