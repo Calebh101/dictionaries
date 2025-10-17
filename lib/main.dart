@@ -116,80 +116,101 @@ class _HomeState extends State<Home> {
 
     return Scaffold(
       body: Center(
-        child: Row(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(children.length, (i) {
-            HomeNode child = children[i];
-            double size = 48;
-      
-            return Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Tooltip(
-                message: child.description,
-                child: ElevatedButton(onPressed: () async {
-                  Logger.print("Activated button of type ${child.runtimeType}: ${child.text}");
-
-                  if (child is HomeOption) {
-                    Logger.print("Starting function ${child.id}...");
-                    child.onActivate.call();
-                  } else if (child is HomeMenu) {
-                    var result = await showMenu<int>(context: context, positionBuilder: (context, constraints) {
-                      double x = constraints.maxWidth / 2;
-                      double y = constraints.maxHeight / 2;
-                      return RelativeRect.fromLTRB(x, y, x, y);
-                    }, items: child.options.map((item) {
-                      return PopupMenuItem(
-                        value: item.id,
-                        child: Row(
-                          children: [
-                            item.child != null ? Padding(
-                              padding: EdgeInsets.all(0),
-                              child: SizedBox(
-                                width: size,
-                                height: size,
-                                child: item.child,
-                              ),
-                            ) : (item.icon != null ? Icon(item.icon, size: size) : null),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text(item.text),
-                                  Text(item.description, style: TextStyle(fontSize: 10)),
-                                ],
-                              ),
+          children: [
+            Spacer(),
+            Text("Welcome to Dictionaries!", style: TextStyle(fontSize: 48)),
+            Text("Dictionaries is a tool to view and edit data files like JSON, YAML, and more in a user-friendly and intuitive tree view."),
+            Spacer(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(children.length, (i) {
+                HomeNode child = children[i];
+                double size = 48;
+                  
+                return Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Tooltip(
+                    message: child.description,
+                    child: ElevatedButton(onPressed: () async {
+                      Logger.print("Activated button of type ${child.runtimeType}: ${child.text}");
+            
+                      if (child is HomeOption) {
+                        Logger.print("Starting function ${child.id}...");
+                        child.onActivate.call();
+                      } else if (child is HomeMenu) {
+                        var result = await showMenu<int>(context: context, positionBuilder: (context, constraints) {
+                          double x = constraints.maxWidth / 2;
+                          double y = constraints.maxHeight / 2;
+                          return RelativeRect.fromLTRB(x, y, x, y);
+                        }, items: child.options.map((item) {
+                          return PopupMenuItem(
+                            value: item.id,
+                            child: Row(
+                              children: [
+                                item.child != null ? Padding(
+                                  padding: EdgeInsets.all(0),
+                                  child: SizedBox(
+                                    width: size,
+                                    height: size,
+                                    child: item.child,
+                                  ),
+                                ) : (item.icon != null ? Icon(item.icon, size: size) : null),
+                                Expanded(
+                                  child: Column(
+                                    children: [
+                                      Text(item.text),
+                                      Text(item.description, style: TextStyle(fontSize: 10)),
+                                    ],
+                                  ),
+                                ),
+                              ].whereType<Widget>().toList(),
                             ),
-                          ].whereType<Widget>().toList(),
-                        ),
-                      );
-                    }).whereType<PopupMenuItem<int>>().toList());
-
-                    HomeNode? widget = child.options.firstWhereOrNull((x) => x.id == result);
-                    Logger.print("Got result of $result (${result.runtimeType}) of type ${widget.runtimeType}");
-                    if (widget == null) return;
-                    if (widget is! HomeOption) throw UnimplementedError();
-                    Logger.print("Starting function ${child.id}:${widget.id}...");
-                    widget.onActivate.call();
-                  }
-                }, child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      child.child != null ? Padding(
-                        padding: EdgeInsets.all(0),
-                        child: SizedBox(
-                          width: size,
-                          height: size,
-                          child: child.child,
-                        ),
-                      ) : (child.icon != null ? Icon(child.icon, size: size) : null),
-                      Text(child.text),
-                    ].whereType<Widget>().toList(),
+                          );
+                        }).whereType<PopupMenuItem<int>>().toList());
+            
+                        HomeNode? widget = child.options.firstWhereOrNull((x) => x.id == result);
+                        Logger.print("Got result of $result (${result.runtimeType}) of type ${widget.runtimeType}");
+                        if (widget == null) return;
+                        if (widget is! HomeOption) throw UnimplementedError();
+                        Logger.print("Starting function ${child.id}:${widget.id}...");
+                        widget.onActivate.call();
+                      }
+                    }, child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          child.child != null ? Padding(
+                            padding: EdgeInsets.all(0),
+                            child: SizedBox(
+                              width: size,
+                              height: size,
+                              child: child.child,
+                            ),
+                          ) : (child.icon != null ? Icon(child.icon, size: size) : null),
+                          Text(child.text),
+                        ].whereType<Widget>().toList(),
+                      ),
+                    )),
                   ),
-                )),
-              ),
-            );
-          }),
+                );
+              }),
+            ),
+            Spacer(),
+            Spacer(),
+            ...(() {
+              String delim = " • ";
+              double? fontSize = 12;
+
+              return [
+                Text(["Made by Calebh101", "Version $version"].join(delim), style: TextStyle(fontSize: fontSize)),
+                if (version.isBeta)
+                Text(["This is a beta version of Dictionaries. Use at your own risk."].join(delim), style: TextStyle(fontSize: fontSize)),
+              ];
+            })(),
+          ],
         ),
       ),
     );
