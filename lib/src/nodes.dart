@@ -15,6 +15,19 @@ import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
 import 'package:yaml/yaml.dart';
 
+int parentCount = 0;
+
+void assignParents(NodeData node, [String? parentId]) {
+  parentCount++;
+  node.parent = parentId;
+  for (var child in node.children) assignParents(child, node.id);
+
+  if (node is NodeKeyValuePair) {
+    node.value.parent = node.id;
+    assignParents(node.value, node.id);
+  }
+}
+
 enum NodeConversionMode {
   json,
   yaml,
@@ -71,11 +84,13 @@ Object? _toSpecified(NodeType type, List<NodeData> children, Object? Function(No
   }
 }
 
-abstract class NodeData {
+abstract class AllNodeData {}
+
+abstract class NodeData extends AllNodeData {
   List<NodeData> _children;
   String id;
   int index = 0;
-  NodeData? parent;
+  String? parent;
   NodeData({List<NodeData>? children, this.parent}) : _children = children ?? [], id = Uuid().v4();
 
   Node get node;
@@ -93,11 +108,7 @@ class Node extends NodeData {
   /// - 2: Map
   int isParentType;
 
-  Node({required this.input, super.children, this.isRoot = false, this.isParentType = 0}) {
-    for (var child in children) {
-      child.parent = this;
-    }
-  }
+  Node({required this.input, super.children, this.isRoot = false, this.isParentType = 0});
 
   @override
   bool isRoot;
@@ -192,20 +203,16 @@ class NodeKeyValuePair extends NodeData {
   String key;
   Node value;
 
-  NodeKeyValuePair({required this.key, required this.value}) : super(children: value.children) {
-    for (var child in children) {
-      child.parent = parent;
-    }
-  }
+  NodeKeyValuePair({required this.key, required this.value}) : super(children: value.children);
 
   @override
   Node get node => value;
 }
 
-class RootNode {
+class RootNode extends AllNodeData {
   List<NodeData> children;
   RootNodeType type;
-  Map<String, NodeData> _lookup = {};
+  Map<String, AllNodeData> _lookup = {};
 
   RootNode({required this.children, required this.type}) {
     rebuild();
@@ -221,6 +228,7 @@ class RootNode {
 
   void rebuild() {
     _buildRootLookup();
+    assignRootNodeParents();
   }
 
   void _buildRootLookup() {
@@ -231,10 +239,23 @@ class RootNode {
 
   void _buildLookup(NodeData node) {
     _lookup[node.id] = node;
+    if (node is NodeKeyValuePair) _buildLookup(node.value);
     for (NodeData child in node.children) _buildLookup(child);
+    _lookup["root"] = this;
   }
 
-  NodeData? lookup(String key) {
+  void assignRootNodeParents() {
+    parentCount = 0;
+
+    for (var child in children) {
+      assignParents(child);
+      child.parent = "root";
+    }
+
+    Logger.print("Assigned $parentCount parents to RootNode!");
+  }
+
+  AllNodeData? lookup(String key) {
     return _lookup.containsKey(key) ? _lookup[key] : null;
   }
 

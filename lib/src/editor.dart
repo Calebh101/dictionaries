@@ -43,8 +43,12 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
     super.initState();
   }
 
-  void refresh({bool tree = false}) {
-    if (tree) controller.rebuild();
+  void refresh({bool rebuild = false}) {
+    if (rebuild) {
+      controller.rebuild();
+      RootNode.instance.rebuild();
+    }
+
     setState(() {});
   }
 
@@ -84,7 +88,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
               NodeData data = root.type == RootNodeType.map ? NodeKeyValuePair(key: "New String", value: node) : node;
               Logger.print("Adding child ${data.runtimeType}... (currently ${entry.node.children.length} children)");
               entry.node.children.add(data);
-              refresh(tree: true);
+              refresh(rebuild: true);
               Logger.print("Added child ${data.runtimeType} (currently ${entry.node.children.length} children)");
             }),
           ];
@@ -135,7 +139,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                     );
                                   }).toList(), onChanged: (value) {
                                     if (value == null) return;
-                                    refresh(tree: true);
+                                    refresh(rebuild: true);
                                   }, value: root.type),
                                 ),
                               ],
@@ -200,6 +204,15 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
               },
               validator: (value) {
                 if (value == null) return "Value cannot be empty.";
+                AllNodeData? parent = RootNode.instance.lookup(data.parent ?? "");
+                Logger.print("Found parent of type ${parent.runtimeType} from ID ${data.parent}");
+
+                if (parent is NodeData) {
+                  if (parent.children.whereType<NodeKeyValuePair>().any((x) => x.key == value)) return "This key already exists.";
+                } else if (parent is RootNode) {
+                  if (parent.children.whereType<NodeKeyValuePair>().any((x) => x.key == value)) return "This key already exists.";
+                }
+
                 return null;
               },
             ),
@@ -305,75 +318,106 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                           ),
                         );
 
-                        return TreeRowContainer(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              SizedBox(
-                                width: width1,
-                                child: keyWidget ?? SelectableText(title, textAlign: TextAlign.left),
-                              ),
-                              SizedBox(
-                                width: width3,
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: data.node.input != null ? valueChild : SizedBox.shrink(),
+                        List<cm.ContextMenuEntry> contextMenuEntries = [
+                          if (data.node.type == NodeType.array || data.node.type == NodeType.map)
+                          cm.MenuItem(label: "New Child", icon: Icons.add, onSelected: () {
+                            Node newNode = Node(input: "New String");
+                            NodeData newData = data.node.type == NodeType.map ? NodeKeyValuePair(key: "New String", value: newNode) : newNode;
+                            Logger.print("Adding child ${newData.runtimeType}... (currently ${entry.node.children.length} children)");
+                            entry.node.children.add(newData);
+                            refresh(rebuild: true);
+                            Logger.print("Added child ${newData.runtimeType} (currently ${entry.node.children.length} children)");
+                          }),
+                          cm.MenuItem(label: "Delete", icon: Icons.delete, onSelected: () {
+                            AllNodeData? parent = RootNode.instance.lookup(data.parent ?? "");
+                            Logger.print("Found parent of type ${parent.runtimeType} from ID ${data.parent}");
+                            if (parent == null) return;
+                            
+                            if (parent is NodeData) {
+                              parent.children.removeWhere((x) => x.id == data.id);
+                            } else if (parent is RootNode) {
+                              parent.children.removeWhere((x) => x.id == data.id);
+                            } else {
+                              return;
+                            }
+
+                            Logger.print("Removed child of ID ${data.id}");
+                            refresh(rebuild: true);
+                          })
+                        ];
+
+                        return cm.ContextMenuRegion(
+                          contextMenu: cm.ContextMenu(entries: contextMenuEntries),
+                          child: TreeRowContainer(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                SizedBox(
+                                  width: width1,
+                                  child: keyWidget ?? SelectableText(title, textAlign: TextAlign.left),
                                 ),
-                              ),
-                              SizedBox(
-                                width: width2,
-                                child: DropdownButton<NodeType>(isDense: true, items: NodeType.values.map((type) {
-                                  return DropdownMenuItem<NodeType>(
-                                    alignment: AlignmentGeometry.center,
-                                    value: type,
-                                    child: Text(nodeTypeToString(type), textAlign: TextAlign.center),
-                                  );
-                                }).toList(), onChanged: (type) {
-                                  if (type == null) return;
-                                  if (type == data.node.type) return;
-                                  
-                                  if (type == NodeType.map) {
-                                    data.node.input = null;
-                                    data.node.isParentType = 2;
-                                    List<NodeKeyValuePair> children = [];
-                          
-                                    for (NodeData child in data.node.children) {
-                                      if (child is Node) {
-                                        children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
-                                      } else if (child is NodeKeyValuePair) {
-                                        children.add(child);
+                                SizedBox(
+                                  width: width3,
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 8),
+                                    child: data.node.input != null ? valueChild : SizedBox.shrink(),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: width2,
+                                  child: DropdownButton<NodeType>(isDense: true, items: NodeType.values.map((type) {
+                                    return DropdownMenuItem<NodeType>(
+                                      alignment: AlignmentGeometry.center,
+                                      value: type,
+                                      child: Text(nodeTypeToString(type), textAlign: TextAlign.center),
+                                    );
+                                  }).toList(), onChanged: (type) {
+                                    if (type == null) return;
+                                    if (type == data.node.type) return;
+                                    
+                                    if (type == NodeType.map) {
+                                      data.node.input = null;
+                                      data.node.isParentType = 2;
+                                      List<NodeKeyValuePair> children = [];
+                            
+                                      for (NodeData child in data.node.children) {
+                                        if (child is Node) {
+                                          children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
+                                        } else if (child is NodeKeyValuePair) {
+                                          children.add(child);
+                                        }
                                       }
-                                    }
-                          
-                                    data.node.children.clear();
-                                    data.node.children = children;
-                                  } else if (type == NodeType.array) {
-                                    data.node.input = null;
-                                    data.node.isParentType = 1;
-                                    List<Node> children = [];
-                          
-                                    for (NodeData child in data.node.children) {
-                                      if (child is Node) {
-                                        children.add(child);
-                                      } else if (child is NodeKeyValuePair) {
-                                        children.add(Node(input: child.node.input));
+                            
+                                      data.node.children.clear();
+                                      data.node.children = children;
+                                    } else if (type == NodeType.array) {
+                                      data.node.input = null;
+                                      data.node.isParentType = 1;
+                                      List<Node> children = [];
+                            
+                                      for (NodeData child in data.node.children) {
+                                        if (child is Node) {
+                                          children.add(child);
+                                        } else if (child is NodeKeyValuePair) {
+                                          children.add(Node(input: child.node.input));
+                                        }
                                       }
+                            
+                                      data.node.children.clear();
+                                      data.node.children = children;
+                                    } else {
+                                      data.node.isParentType = 0;
+                                      data.children.clear();
+                                      data.node.input = getDefaultValue(type);
                                     }
-                          
-                                    data.node.children.clear();
-                                    data.node.children = children;
-                                  } else {
-                                    data.node.isParentType = 0;
-                                    data.children.clear();
-                                    data.node.input = getDefaultValue(type);
-                                  }
-                          
-                                  Logger.print("Changing node to $type... (value of ${data.node.input}) (${[data.node.input.runtimeType, data.node.type, data.node.identify(debug: true), data.children.isEmpty].join(" - ")}) (${data.children.length} children)");
-                                  RootNode.instance.rebuild();
-                                  refresh(tree: true);
-                                }, value: data.node.type),
-                              ),
-                            ],
+                            
+                                    Logger.print("Changing node to $type... (value of ${data.node.input}) (${[data.node.input.runtimeType, data.node.type, data.node.identify(debug: true), data.children.isEmpty].join(" - ")}) (${data.children.length} children)");
+                                    RootNode.instance.rebuild();
+                                    refresh(rebuild: true);
+                                  }, value: data.node.type),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }
