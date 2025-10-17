@@ -91,11 +91,19 @@ abstract class NodeData extends AllNodeData {
   String id;
   int index = 0;
   String? parent;
+
   NodeData({List<NodeData>? children, this.parent}) : _children = children ?? [], id = Uuid().v4();
+  NodeData copy();
 
   Node get node;
   bool get isRoot => false;
   List<NodeData> get children => _children;
+  AllNodeData? getParent() => RootNode.instance.lookup(parent);
+
+  NodeData? getParentAsNodeData() {
+    var result = RootNode.instance.lookup(parent);
+    return result is NodeData ? result : null;
+  }
 
   set children(value) => _children;
 }
@@ -120,6 +128,11 @@ class Node extends NodeData {
   NodeType identify({bool debug = false}) => _identify(debug: debug);
   bool get hasChildren => children.isNotEmpty;
   bool get isDecimal => input is double;
+
+  @override
+  NodeData copy() {
+    return Node(input: input, children: children, isRoot: isRoot, isParentType: isParentType);
+  }
 
   static Object? toJson(NodeData input, NodeConversionMode mode) {
     Object? process(NodeData input) {
@@ -207,6 +220,11 @@ class NodeKeyValuePair extends NodeData {
 
   @override
   Node get node => value;
+
+  @override
+  NodeData copy() {
+    return NodeKeyValuePair(key: key, value: value);
+  }
 }
 
 class RootNode extends AllNodeData {
@@ -255,8 +273,14 @@ class RootNode extends AllNodeData {
     Logger.print("Assigned $parentCount parents to RootNode!");
   }
 
-  AllNodeData? lookup(String key) {
+  AllNodeData? lookup(String? key) {
     return _lookup.containsKey(key) ? _lookup[key] : null;
+  }
+
+  NodeData? lookupNodeData(String? key) {
+    var result = lookup(key);
+    if (result is NodeData) return result;
+    return null;
   }
 
   Object? _toJson(NodeConversionMode mode) => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => Node.toJson(x, mode));
