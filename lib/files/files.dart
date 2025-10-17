@@ -1,0 +1,1 @@
+export 'package:dictionaries/files/desktop.dart' if (dart.library.js_interop) 'package:dictionaries/files/web.dart';

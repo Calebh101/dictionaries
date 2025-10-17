@@ -1,3 +1,4 @@
+import 'package:dictionaries/main.dart';
 import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/nodes.dart';
 import 'package:dictionaries/src/preview.dart';
@@ -75,6 +76,10 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    if (ScreenTooSmallWidget.compare(context) == false) {
+      return ScreenTooSmallWidget();
+    }
 
     return Scaffold(
       appBar: AppBar(

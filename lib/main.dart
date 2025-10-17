@@ -10,8 +10,7 @@ import 'package:localpkg/classes.dart';
 import 'package:localpkg/dialogue.dart';
 import 'package:localpkg/functions.dart';
 import 'package:styled_logger/styled_logger.dart';
-
-export 'files/desktop.dart' if (dart.library.js_interop) 'files/web.dart';
+import 'package:dictionaries/files/files.dart';
 
 final Version version = Version.parse("0.0.0A");
 final Version binaryVersion = Version.parse("1.0.0A");
@@ -93,6 +92,10 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
+    if (ScreenTooSmallWidget.compare(context) == false) {
+      return ScreenTooSmallWidget();
+    }
+
     List<HomeNode> children = [
       HomeOption("Create", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
         activateEditor(utf8.encode(jsonEncode({})));
@@ -217,4 +220,62 @@ Widget? decideEditor(Uint8List raw) {
 ({bool value, String string}) returnRecord() {
   final record = (value: true, string: "yes");
   return record;
+}
+
+class ScreenTooSmallWidget extends StatefulWidget {
+  const ScreenTooSmallWidget({super.key});
+  static const threshold = Size(600, 400);
+
+  /// True if the screen is big enough.
+  static bool compare(BuildContext context) {
+    Size screen = MediaQuery.of(context).size;
+    return screen.width > threshold.width && screen.height > threshold.height;
+  }
+
+  @override
+  State<ScreenTooSmallWidget> createState() => _ScreenTooSmallWidgetState();
+}
+
+class _ScreenTooSmallWidgetState extends State<ScreenTooSmallWidget> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text("Uh oh!", style: TextStyle(fontSize: 48)),
+              Text("Your screen is too small! This application needs a larger screen to operate correctly.", softWrap: true),
+              Text("However, you can still convert your file to a Dictionary."),
+              TextButton(onPressed: () async {
+                Logger.print("Starting upload...");
+                var result = await FilePicker.platform.pickFiles(withData: true);
+                Uint8List? bytes = result?.files.firstOrNull?.bytes;
+                Logger.print("Found ${bytes?.length ?? -1} bytes");
+                if (bytes == null || bytes.isEmpty) return;
+
+                var root = RootNode.tryParse(bytes);
+                if (root == null) return SnackBarManager.show(context, "Unable to parse file.").toVoid();
+
+                var binary = root.toBinary();
+                Logger.print("Found binary of ${binary.length} bytes, saving...");
+                List<String> name = (result?.names.firstOrNull ?? "MyDictionary").split(".");
+                bool saved = await saveFile(name: name.sublist(0, name.length - 1).join("."), bytes: binary);
+
+                if (saved) {
+                  Logger.print("File saved.");
+                  SnackBarManager.show(context, "File saved!");
+                } else {
+                  Logger.warn("File not saved.");
+                  SnackBarManager.show(context, "Unable to save file.");
+                }
+              }, child: Text("Convert to Dictionary")),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

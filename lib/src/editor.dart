@@ -1,4 +1,5 @@
 import 'package:any_date/any_date.dart';
+import 'package:dictionaries/files/files.dart';
 import 'package:dictionaries/main.dart';
 import 'package:dictionaries/src/nodeenums.dart';
 import 'package:dictionaries/src/nodes.dart';
@@ -314,7 +315,10 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                               ),
                               SizedBox(
                                 width: width3,
-                                child: data.node.input != null ? valueChild : SizedBox.shrink(),
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 8),
+                                  child: data.node.input != null ? valueChild : SizedBox.shrink(),
+                                ),
                               ),
                               SizedBox(
                                 width: width2,
