@@ -15,6 +15,8 @@ import 'package:styled_logger/styled_logger.dart';
 bool throwOnBinary = false; // Debug option
 String? currentFileName;
 List<NodeData> currentExpanded = [];
+bool isCurrentlyShowingMoveUpDownOverlay = false;
+List<MoveUpDownWidget> moveUpDownWidgets = [];
 
 class ObjectEditorDesktop extends StatefulWidget {
   const ObjectEditorDesktop({super.key});
@@ -307,7 +309,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                               double maxWidth = MediaQuery.of(context).size.width;
                               double width2 = 100;
                               double width3 = maxWidth * 0.3;
-                              double width1 = constraints.maxWidth - width2 - width3;
+                              double width1 = constraints.maxWidth - width2 - width3 - 48;
               
                               Object? get(String source) {
                                 switch (data.node.type) {
@@ -474,6 +476,34 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                           refresh(rebuild: true);
                                         }, value: data.node.type),
                                       ),
+                                      Builder(
+                                        builder: (context) {
+                                          var parent = data.getParent();
+                                          late List<NodeData> children;
+                                          int index = 0;
+
+                                          if (parent is NodeData) {
+                                            children = parent.children;
+                                          } else if (parent is RootNode) {
+                                            children = parent.children;
+                                          } else {
+                                            throw UnimplementedError();
+                                          }
+
+                                          for (var child in children) {
+                                            if (child.id == data.id) break;
+                                            index++;
+                                          }
+
+                                          void move(int factor) {
+                                            children.removeAt(index);
+                                            children.insert(index - factor, data);
+                                            refresh(rebuild: true);
+                                          }
+
+                                          return MoveUpDownWidget(onMoveUp: index == 0 ? null : (context) => move(1), onMoveDown: index == children.length - 1 ? null : (context) => move(-1));
+                                        }
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -534,6 +564,128 @@ class _TreeRowContainerState extends State<TreeRowContainer> {
         padding: EdgeInsets.symmetric(vertical: 5),
         child: widget.child,
       ),
+    );
+  }
+}
+
+class MoveUpDownWidget extends StatefulWidget {
+  final void Function(BuildContext context)? onMoveUp;
+  final void Function(BuildContext context)? onMoveDown;
+
+  final bool showOnEnter;
+  final bool hideAllOnContact;
+
+  late final _MoveUpDownWidgetState _state;
+  MoveUpDownWidget({super.key, required this.onMoveUp, required this.onMoveDown, this.showOnEnter = true, this.hideAllOnContact = true});
+
+  @override
+  State<MoveUpDownWidget> createState() => _state = _MoveUpDownWidgetState();
+
+  void show() {
+    _state.show();
+  }
+
+  void hide() {
+    _state.hide();
+  }
+}
+
+class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
+  OverlayEntry? entry;
+  LayerLink link = LayerLink();
+
+  @override
+  void initState() {
+    moveUpDownWidgets.add(widget);
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  void show() {
+    if (widget.hideAllOnContact) {
+      for (var child in moveUpDownWidgets) {
+        if (widget == child) continue;
+        child.hide();
+      }
+    }
+
+    if (entry != null || isCurrentlyShowingMoveUpDownOverlay == true) return;
+    isCurrentlyShowingMoveUpDownOverlay = true;
+    Logger.print("Showing...");
+
+    double elements = 0;
+    for (var x in [true, widget.onMoveUp != null, widget.onMoveDown != null]) if (x) elements++;
+
+    Widget popup = Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.light ? Colors.white : const Color.fromARGB(255, 47, 47, 47),
+        borderRadius: BorderRadius.all(Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.onMoveUp != null)
+          IconButton(onPressed: () {
+            hide();
+            widget.onMoveUp!.call(context);
+          }, icon: Icon(Icons.arrow_upward)),
+          IconButton(onPressed: () {
+            hide();
+          }, icon: Icon(Icons.cancel_outlined)),
+          if (widget.onMoveDown != null)
+          IconButton(onPressed: () {
+            hide();
+            widget.onMoveDown!.call(context);
+          }, icon: Icon(Icons.arrow_downward)),
+        ],
+      ),
+    );
+
+    entry = OverlayEntry(
+      builder: (context) {
+        return Positioned(
+          width: 48,
+          height: elements * 48,
+          child: CompositedTransformFollower(
+            link: link,
+            showWhenUnlinked: false,
+            offset: Offset(-40, -48),
+            child: Material(
+              elevation: 4,
+              color: Colors.transparent,
+              child: popup,
+            ),
+          ),
+        );
+      },
+    );
+
+    Overlay.of(context).insert(entry!);
+  }
+
+  void hide() {
+    if (entry == null) return;
+    Logger.print("Hiding entry of type ${entry.runtimeType}...");
+    entry?.remove();
+    entry = null;
+    isCurrentlyShowingMoveUpDownOverlay = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (event) {
+        if (widget.showOnEnter) show();
+      },
+      child: CompositedTransformTarget(
+        link: link,
+        child: IconButton(onPressed: () => show(), icon: Icon(Icons.more_vert),
+      )),
     );
   }
 }
