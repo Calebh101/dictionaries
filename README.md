@@ -28,11 +28,7 @@ Use the 8-byte length to determine how long the signature + node content is, the
 
 #### Nodes
 
-After the signature, there is an unsigned 64-bit integer saying how long the attribute data is, the attribute data, then the rest is just raw data.
-
-##### Attributes
-
-The length says how long the attributes are, not including the length bytes themselves. Each attribute is a null-terminated UTF8 key, then a null-terminated UTF8 value.
+After the signature, there is an unsigned 64-bit integer saying how long the attribute data is, then the rest is just raw data.
 
 ##### Data
 
