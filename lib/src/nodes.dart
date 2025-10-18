@@ -7,8 +7,7 @@ import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/nodeenums.dart';
 import 'package:intl/intl.dart';
 import 'package:json2yaml/json2yaml.dart';
-import 'package:localpkg/classes.dart';
-import 'package:localpkg/functions.dart';
+import 'package:localpkg_flutter/localpkg.dart';
 import 'package:dictionaries/lib/plist_parser.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:uuid/uuid.dart';
@@ -17,14 +16,14 @@ import 'package:yaml/yaml.dart';
 
 int parentCount = 0;
 
-void assignParents(NodeData node, [String? parentId]) {
+void assignParents(NodeData node, [AllNodeData? parent]) {
   parentCount++;
-  node.parent = parentId;
-  for (var child in node.children) assignParents(child, node.id);
+  node.parent = parent;
+  for (var child in node.children) assignParents(child, node);
 
   if (node is NodeKeyValuePair) {
-    node.value.parent = node.id;
-    assignParents(node.value, node.id);
+    node.value.parent = node;
+    assignParents(node.value, node);
   }
 }
 
@@ -84,13 +83,15 @@ Object? _toSpecified(NodeType type, List<NodeData> children, Object? Function(No
   }
 }
 
-abstract class AllNodeData {}
+abstract class AllNodeData {
+  bool get isRootNode => this is RootNode;
+}
 
 abstract class NodeData extends AllNodeData {
   List<NodeData> _children;
   String id;
   int index = 0;
-  String? parent;
+  AllNodeData? parent;
 
   NodeData({List<NodeData>? children, this.parent}) : _children = children ?? [], id = Uuid().v4();
   NodeData copy();
@@ -98,11 +99,10 @@ abstract class NodeData extends AllNodeData {
   Node get node;
   bool get isRoot => false;
   List<NodeData> get children => _children;
-  AllNodeData? getParent() => RootNode.instance.lookup(parent);
 
   NodeData? getParentAsNodeData() {
-    var result = RootNode.instance.lookup(parent);
-    return result is NodeData ? result : null;
+    if (parent is NodeData) return parent as NodeData;
+    return null;
   }
 
   set children(value) => _children;
@@ -267,7 +267,7 @@ class RootNode extends AllNodeData {
 
     for (var child in children) {
       assignParents(child);
-      child.parent = "root";
+      child.parent = this;
     }
 
     Logger.print("Assigned $parentCount parents to RootNode!");

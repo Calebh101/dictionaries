@@ -33,7 +33,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
   @override
   void initState() {
     Node root = Node(input: RootNode.instance, children: RootNode.instance.children, isRoot: true);
-    controller = TreeController<NodeData>(roots: [root], childrenProvider: (node) => node.children, parentProvider: (node) => RootNode.instance.lookupNodeData(node.parent));
+    controller = TreeController<NodeData>(roots: [root], childrenProvider: (node) => node.children, parentProvider: (node) => node.getParentAsNodeData());
     controller.expand(root);
 
     controller.addListener(() async {
@@ -98,7 +98,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
             node: node,
             onWillAcceptWithDetails: (details) => true,
             onNodeAccepted: (details) {
-              AllNodeData oldParent = details.draggedNode.getParent()!;
+              AllNodeData oldParent = details.draggedNode.parent!;
 
               if (oldParent is NodeData) {
                 oldParent.children.removeWhere((x) => x.id == details.targetNode.id);
@@ -107,7 +107,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                 oldParent.children.removeWhere((x) => x.id == details.targetNode.id);
               }
 
-              details.draggedNode.parent = "root";
+              details.draggedNode.parent = RootNode.instance;
               node.children.add(details.draggedNode);
               refresh(rebuild: true);
             },
@@ -225,7 +225,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
               },
               validator: (value) {
                 if (value == null) return "Value cannot be empty.";
-                AllNodeData? parent = RootNode.instance.lookup(data.parent ?? "");
+                AllNodeData? parent = data.parent;
                 Logger.print("Found parent of type ${parent.runtimeType} from ID ${data.parent}");
 
                 if (parent is NodeData) {
@@ -250,7 +250,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
         }
       
         return SizedBox(
-          height: 24,
+          height: 30,
           child: TreeDragTarget<NodeData>(
             node: data,
             onWillAcceptWithDetails: (details) {
@@ -258,7 +258,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
             },
             onNodeAccepted: (details) {
               NodeData dragged = details.draggedNode;
-              AllNodeData oldParent = details.draggedNode.getParent()!;
+              AllNodeData oldParent = details.draggedNode.parent!;
           
               if (oldParent is NodeData) {
                 Logger.print("Dragging ${dragged.id} to new parent ${details.targetNode.id} from parent ${oldParent.id}");
@@ -274,7 +274,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                 throw UnimplementedError();
               }
           
-              dragged.parent = details.targetNode.id;
+              dragged.parent = details.targetNode;
               details.targetNode.children.add(dragged);
               refresh(rebuild: true);
             },
@@ -391,7 +391,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                   Logger.print("Added child ${newData.runtimeType} (currently ${entry.node.children.length} children)");
                                 }),
                                 cm.MenuItem(label: "Delete", icon: Icons.delete, onSelected: () {
-                                  AllNodeData? parent = RootNode.instance.lookup(data.parent ?? "");
+                                  AllNodeData? parent = data.parent;
                                   Logger.print("Found parent of type ${parent.runtimeType} from ID ${data.parent}");
                                   if (parent == null) return;
                                   
@@ -480,7 +480,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                       ),
                                       Builder(
                                         builder: (context) {
-                                          var parent = data.getParent();
+                                          var parent = data.parent;
                                           late List<NodeData> children;
                                           int index = 0;
               

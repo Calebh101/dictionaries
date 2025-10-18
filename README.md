@@ -1,8 +1,7 @@
-# Dictionaries
+<p align="center" style="font-size:48px;">Dictionaries</p>
+<p align="center">Dictionaries is a tool to view and edit data files like JSON, YAML, and more in a user-friendly and intuitive tree view.</p>
 
-A cool little tool to centralize your development of different "dictionaries".
-
-# Binary File Handling
+# Binary File Format
 
 With this new app came a new file type: `application/xc-dict`, or `.dictionary`. This is where I'm gonna document all of it.
 
