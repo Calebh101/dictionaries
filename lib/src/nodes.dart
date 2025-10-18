@@ -131,7 +131,7 @@ class Node extends NodeData {
 
   @override
   NodeData copy() {
-    return Node(input: input, children: children, isRoot: isRoot, isParentType: isParentType);
+    return Node(input: input, children: children.map((x) => x.copy()).toList(), isRoot: isRoot, isParentType: isParentType);
   }
 
   static Object? toJson(NodeData input, NodeConversionMode mode) {
@@ -200,14 +200,13 @@ class Node extends NodeData {
 
   String valueToString() {
     switch (type) {
-      case NodeType.map:
-      case NodeType.array: return "${children.length} Children";
       case NodeType.boolean: return (input as bool) ? "True" : "False";
       case NodeType.data: return (input as Uint8List).formatHex();
       case NodeType.date: return DateFormat("MMM d, y h:mm a").format(input as DateTime);
       case NodeType.empty: return "Null";
       case NodeType.number: return input.toString();
       case NodeType.string: return input.toString();
+      default: return "";
     }
   }
 }
