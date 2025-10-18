@@ -83,11 +83,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
 
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        excludeHeaderSemantics: true,
-        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color.fromARGB(255, 18, 23, 25) : Colors.white,
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color.fromARGB(255, 19, 21, 25) : Colors.white,
         title: Text(["Dictionaries"].join(" - ")),
         centerTitle: true,
         bottom: PreferredSize(
