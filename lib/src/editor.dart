@@ -10,12 +10,14 @@ import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:localpkg_flutter/localpkg.dart';
 import 'package:menu_bar/menu_bar.dart';
 import 'package:styled_logger/styled_logger.dart';
+import 'package:undo/undo.dart';
 
 bool throwOnBinary = false; // Debug option
 String? currentFileName;
 List<NodeData> currentExpanded = [];
 bool isCurrentlyShowingMoveUpDownOverlay = false;
 List<MoveUpDownWidget> moveUpDownWidgets = [];
+ChangeStack changes = ChangeStack(limit: 50);
 
 class ObjectEditorDesktop extends StatefulWidget {
   const ObjectEditorDesktop({super.key});
@@ -77,6 +79,16 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
             if (result == true) SimpleNavigator.navigate(context: context, page: Home(), mode: NavigatorMode.pushReplacement);
           }),
         ])),
+        BarButton(text: Text("Edit"), submenu: SubMenu(menuItems: [
+          MenuButton(text: Text("Undo"), onTap: changes.canUndo ? () {
+            changes.undo();
+            refresh(rebuild: true);
+          } : null),
+          MenuButton(text: Text("Redo"), onTap: changes.canRedo ? () {
+            changes.redo();
+            refresh(rebuild: true);
+          } : null),
+        ]))
       ],
       child: AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
         if (entry.node.isRoot) {
@@ -219,14 +231,21 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                 if (source == null) return;
                 bool result = (keyControllers[data.id]!.key.currentState as FormState).validate();
                 if (result == false) return;
-                Logger.print("Setting key...");
-                nkvp.key = source;
+
+                var change = Change<NodeKeyValuePair>(
+                  data,
+                  () => data.key = source,
+                  (old) => data.key = old.key,
+                );
+
+                changes.add(change);
+                Logger.print("Setting key with change ${change.runtimeType}...");
                 setState(() {});
               },
               validator: (value) {
                 if (value == null) return "Value cannot be empty.";
                 AllNodeData? parent = data.parent;
-                Logger.print("Found parent of type ${parent.runtimeType} from ID ${data.parent}");
+                Logger.print("Found parent of type ${parent.runtimeType}");
 
                 if (parent is NodeData) {
                   if (parent.children.whereType<NodeKeyValuePair>().any((x) => x.key == value)) return "This key already exists.";
@@ -635,6 +654,7 @@ class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
           IconButton(onPressed: () {
             hide();
             widget.onMoveUp!.call(context);
+            WidgetsBinding.instance.addPostFrameCallback((d) => show());
           }, icon: Icon(Icons.arrow_upward)),
           IconButton(onPressed: () {
             hide();
@@ -643,6 +663,7 @@ class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
           IconButton(onPressed: () {
             hide();
             widget.onMoveDown!.call(context);
+            WidgetsBinding.instance.addPostFrameCallback((d) => show());
           }, icon: Icon(Icons.arrow_downward)),
         ],
       ),

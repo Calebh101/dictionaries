@@ -39,6 +39,7 @@ dependencies:
   meta: ^1.16.0
   any_date: ^1.2.1
   flutter_context_menu: ^0.3.0
+  undo: ^1.5.0
 
 dev_dependencies:
   flutter_test:
