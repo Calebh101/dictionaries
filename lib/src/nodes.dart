@@ -240,6 +240,7 @@ class RootNode extends AllNodeData {
     rebuild();
   }
 
+  static const bool allowLookup = false;
   static const String fileMagic = "XC-DICT";
   static late RootNode instance;
   static int nodes = 0;
@@ -250,12 +251,14 @@ class RootNode extends AllNodeData {
   }
 
   void _buildRootLookup() {
+    if (!allowLookup) return;
     _lookup = {};
     for (NodeData child in children) _buildLookup(child);
     Logger.print("Built root lookup of ${_lookup.length} entries");
   }
 
   void _buildLookup(NodeData node) {
+    if (!allowLookup) return;
     _lookup[node.id] = node;
     if (node is NodeKeyValuePair) _buildLookup(node.value);
     for (NodeData child in node.children) _buildLookup(child);
