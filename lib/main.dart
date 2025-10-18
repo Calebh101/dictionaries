@@ -298,3 +298,15 @@ class _ScreenTooSmallWidgetState extends State<ScreenTooSmallWidget> {
     );
   }
 }
+
+bool debug(void Function() function) {
+  Logger.print("Debug: Running function ${function.hashCode}...");
+
+  try {
+    function.call();
+    return true;
+  } catch (e) {
+    Logger.warn("Debug: Function ${function.hashCode} failed: $e");
+    return false;
+  }
+}

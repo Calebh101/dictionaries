@@ -234,8 +234,8 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
                 var change = Change<NodeKeyValuePair>(
                   data,
-                  () => data.key = source,
-                  (old) => data.key = old.key,
+                  () => debug(() => data.key = source),
+                  (old) => debug(() => data.key = old.key),
                 );
 
                 changes.add(change);
