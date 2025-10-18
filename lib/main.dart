@@ -6,9 +6,7 @@ import 'package:dictionaries/src/nodes.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:localpkg/classes.dart';
-import 'package:localpkg/dialogue.dart';
-import 'package:localpkg/functions.dart';
+import 'package:localpkg_flutter/localpkg.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:dictionaries/files/files.dart';
 

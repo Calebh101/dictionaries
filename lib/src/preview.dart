@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:dictionaries/lib/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_highlight/themes/gruvbox-dark.dart';
-import 'package:localpkg/dialogue.dart';
+import 'package:localpkg_flutter/localpkg.dart';
 
 class ObjectEditorPreview extends StatefulWidget {
   final DataType type;

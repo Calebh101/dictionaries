@@ -7,8 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as cm;
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
-import 'package:localpkg/dialogue.dart';
-import 'package:localpkg/functions.dart';
+import 'package:localpkg_flutter/localpkg.dart';
 import 'package:menu_bar/menu_bar.dart';
 import 'package:styled_logger/styled_logger.dart';
 

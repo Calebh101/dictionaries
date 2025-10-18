@@ -305,11 +305,20 @@ packages:
     source: hosted
     version: "5.1.1"
   localpkg:
+    dependency: transitive
+    description:
+      path: "."
+      ref: e4d2b624487e25c79266353b32043beba8faa422
+      resolved-ref: e4d2b624487e25c79266353b32043beba8faa422
+      url: "https://github.com/Calebh101/localpkg-dart.git"
+    source: git
+    version: "1.0.0"
+  localpkg_flutter:
     dependency: "direct main"
     description:
       path: "."
-      ref: a15152c7e29c5267933060ff9b22639b7a0166d1
-      resolved-ref: a15152c7e29c5267933060ff9b22639b7a0166d1
+      ref: main
+      resolved-ref: "7fbabd5e16400fcf8cfdba7fd45ecd252380388d"
       url: "https://github.com/Calebh101/localpkg-flutter-2.git"
     source: git
     version: "2.0.0"

@@ -1,17 +1,22 @@
 import 'package:dictionaries/src/nodeenums.dart';
 
+void _debug(Object? input) {
+  // ignore: avoid_print
+  print("Signatures: $input");
+}
+
 void main(List<String> arguments) {
   int i = 0;
 
   for (NodeType type in NodeType.values) {
     int signature = getSignature(0, type);
-    print("0 (NODE): $type of index $i ($signature) (${[signature].formatBytes()})");
+    _debug("0 (NODE): $type of index $i ($signature) (${[signature].formatBytes()})");
     i++;
   }
 
   (() {
     int signature = getSignature(1);
-    print("1 (NKVP): $signature (${[signature].formatBytes()})");
+    _debug("1 (NKVP): $signature (${[signature].formatBytes()})");
   })();
 }
 
