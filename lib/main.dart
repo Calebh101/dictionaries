@@ -126,14 +126,14 @@ class _HomeState extends State<Home> {
               children: List.generate(children.length, (i) {
                 HomeNode child = children[i];
                 double size = 48;
-                  
+
                 return Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Tooltip(
                     message: child.description,
                     child: ElevatedButton(onPressed: () async {
                       Logger.print("Activated button of type ${child.runtimeType}: ${child.text}");
-            
+
                       if (child is HomeOption) {
                         Logger.print("Starting function ${child.id}...");
                         child.onActivate.call();
@@ -167,7 +167,7 @@ class _HomeState extends State<Home> {
                             ),
                           );
                         }).whereType<PopupMenuItem<int>>().toList());
-            
+
                         HomeNode? widget = child.options.firstWhereOrNull((x) => x.id == result);
                         Logger.print("Got result of $result (${result.runtimeType}) of type ${widget.runtimeType}");
                         if (widget == null) return;
@@ -308,5 +308,15 @@ bool debug(void Function() function) {
   } catch (e) {
     Logger.warn("Debug: Function ${function.hashCode} failed: $e");
     return false;
+  }
+}
+
+Object? copy(Object? input) {
+  if (input is DateTime) {
+    return input.copyWith();
+  } else if (input is Uint8List) {
+    return Uint8List.fromList(input);
+  } else {
+    return input;
   }
 }
