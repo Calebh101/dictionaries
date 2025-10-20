@@ -51,8 +51,11 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-# dart run flutter_native_splash:create
 flutter_native_splash:
-  color: "#FF9999"
-  image: web/favicon.png
+  color: "#FFFFFF"
+  color_dark: "#292929"
+  image: assets/splash.png
   fullscreen: true
+
+# Generate splash screens: dart run flutter_native_splash:create
+# Make splash icon from web favicon: convert web/favicon.png -resize 256x256 assets/splash.png
