@@ -1,6 +1,6 @@
 {
-    "name": "dictionaries",
-    "short_name": "dictionaries",
+    "name": "Dictionaries",
+    "short_name": "Dictionaries",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
