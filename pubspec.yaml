@@ -58,4 +58,4 @@ flutter_native_splash:
   fullscreen: true
 
 # Generate splash screens: dart run flutter_native_splash:create
-# Make splash icon from web favicon: convert web/favicon.png -resize 256x256 assets/splash.png
+# Make splash icon from web favicon: convert web/favicon.png -resize 512x512 assets/splash.png
