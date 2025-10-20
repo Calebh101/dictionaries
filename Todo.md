@@ -1,3 +1,3 @@
 ## Todo - Undo/Redo
 
-- Root node type changing
+- Fix root node type changing (it breaks node inputs when moving)

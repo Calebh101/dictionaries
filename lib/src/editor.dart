@@ -216,9 +216,76 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                         value: type,
                                         child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
                                       );
-                                    }).toList(), onChanged: (value) {
-                                      if (value == null) return;
-                                      refresh(rebuild: true);
+                                    }).toList(), onChanged: (type) {
+                                      if (type == null) return;
+                                      if (type == root.type) return;
+
+                                      late void Function() change;
+                                      late void Function(({RootNodeType type, Iterable<NodeData> children}) r) undo;
+
+                                      var old = (
+                                        type: root.type,
+                                        children: List<NodeData>.from(root.children),
+                                      );
+
+                                      root.type = type;
+                                      Logger.print("Set root type to ${root.type}");
+
+                                      if (type == RootNodeType.map) {
+                                        change = () {
+                                          List<NodeKeyValuePair> children = [];
+
+                                          for (NodeData child in root.children) {
+                                            if (child is Node) {
+                                              children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
+                                            } else if (child is NodeKeyValuePair) {
+                                              children.add(child);
+                                            }
+                                          }
+
+                                          root.children.clear();
+                                          for (var child in children) root.children.add(child);
+                                          refresh(rebuild: true);
+                                        };
+                                      } else if (type == RootNodeType.array) {
+                                        change = () {
+                                          List<Node> children = [];
+
+                                          for (NodeData child in root.children) {
+                                            if (child is Node) {
+                                              children.add(child);
+                                            } else if (child is NodeKeyValuePair) {
+                                              children.add(Node(input: child.node.input));
+                                            }
+                                          }
+
+                                          root.children.clear();
+                                          for (var child in children) root.children.add(child);
+                                          refresh(rebuild: true);
+                                        };
+                                      }
+
+                                      undo = (r) {
+                                        Logger.print("Restoring root data: $r");
+                                        root.type = r.type;
+                                        root.children.clear();
+
+                                        for (var child in r.children) {
+                                          root.children.add(child);
+                                        }
+
+                                        Logger.print("Added ${root.children.length} children from ${r.children.length} provided");
+                                        refresh(rebuild: true);
+                                      };
+
+                                      var changeData = Change<({RootNodeType type, Iterable<NodeData> children})>(
+                                        old,
+                                        change,
+                                        undo,
+                                      );
+
+                                      changes.add(changeData);
+                                      refresh();
                                     }, value: root.type),
                                   ),
                                 ],
@@ -673,7 +740,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                             }
 
                                             data.node.children.clear();
-                                            data.node.children = children;
+                                            for (var child in children) data.node.children.add(child);
                                             refresh(rebuild: true);
                                           };
                                         } else if (type == NodeType.array) {
@@ -691,7 +758,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                             }
 
                                             data.node.children.clear();
-                                            data.node.children = children;
+                                            for (var child in children) data.node.children.add(child);
                                             refresh(rebuild: true);
                                           };
                                         } else {
@@ -725,7 +792,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
                                         changes.add(changeData);
                                         Logger.print("Changing node to $type... (value of ${data.node.input}) (${[data.node.input.runtimeType, data.node.type, data.node.identify(debug: true), data.children.isEmpty].join(" - ")}) (${data.children.length} children)");
-                                        setState(() {});
+                                        refresh();
                                       }, value: data.node.type),
                                     ),
                                     Builder(
