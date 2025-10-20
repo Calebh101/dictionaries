@@ -8,7 +8,7 @@ Future<bool> saveFile({
   required String name,
   required Uint8List bytes,
   String extension = "dictionary",
-  String mime = "application/xc-dict",
+  String mime = "application/c-dict",
 }) async {
   final blob = web.Blob([bytes].jsify() as JSArray<web.BlobPart>, web.BlobPropertyBag(type: mime));
   final url = web.URL.createObjectURL(blob);

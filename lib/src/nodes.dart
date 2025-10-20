@@ -240,7 +240,7 @@ class RootNode extends AllNodeData {
   }
 
   static const bool allowLookup = false;
-  static const String fileMagic = "XC-DICT";
+  static const String fileMagic = "C-DICT";
   static late RootNode instance;
   static int nodes = 0;
 
@@ -416,7 +416,7 @@ class RootNode extends AllNodeData {
         return Node(input: input, children: []);
       }
     }
-    
+
     if (input is Map) {
       int index = -1;
 
@@ -538,7 +538,7 @@ class NodeBinaryManager {
   }
 
   static List<int> nkvpToBinary(NodeKeyValuePair node) {
-    // Encode the key with a null terminator, then include 
+    // Encode the key with a null terminator, then include
     return [...utf8.encode(node.key), 0x00, ...nodeDataToBinary(node.value)];
   }
 

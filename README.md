@@ -3,9 +3,9 @@
 
 # Binary File Format
 
-With this new app came a new file type: `application/xc-dict`, or `.dictionary`. This is where I'm gonna document all of it.
+With this new app came a new file type: `application/c-dict`, or `.dictionary`. This is where I'm gonna document all of it.
 
-First, the naming. The MIME type is `application/xc-dict`, because I feel like `application/dictionary` could collide with a different program. The file extension is typically `.dictionary`, but `.xc-dict` is also accepted.
+First, the naming. The MIME type is `application/c-dict`, because I feel like `application/dictionary` could collide with a different program. The file extension is typically `.dictionary`, but `.c-dict` is also accepted.
 
 ## File Content
 
@@ -13,7 +13,7 @@ Now the actual file content. Assume everything is big endian unless otherwise st
 
 ### Header
 
-The header is the first thing, and it's padded to 128 bytes (if I ever need to store more data). The first 10 bytes or so is the magic: `XC-DICT` padded by 0s on the right. After this is an unsigned 16-bit integer dictating the header size (if it ever needs to be expanded), and after that is the binary file version. This is a sequence of 5 16-bit signed little endian integers, which are parsed as a `Version` object in the code.
+The header is the first thing, and it's padded to 128 bytes (if I ever need to store more data). The first 10 bytes or so is the magic: `C-DICT` padded by 0s on the right. After this is an unsigned 16-bit integer dictating the header size (if it ever needs to be expanded), and after that is the binary file version. This is a sequence of 5 16-bit signed little endian integers, which are parsed as a `Version` object in the code.
 
 ### Data
 
