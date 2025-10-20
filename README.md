@@ -1,4 +1,4 @@
-<p align="center" style="font-size:48px;">Dictionaries</p>
+<h1 align="center">Dictionaries</h1>
 <p align="center">Dictionaries is a tool to view and edit data files like JSON, YAML, and more in a user-friendly and intuitive tree view.</p>
 
 # Binary File Format
