@@ -356,8 +356,8 @@ packages:
     dependency: transitive
     description:
       path: "."
-      ref: "4294137d0350d3cfc3ee1bf19357cb3981f2391e"
-      resolved-ref: "4294137d0350d3cfc3ee1bf19357cb3981f2391e"
+      ref: "6f5f8fda474b759fc05a57115c129cb82243a584"
+      resolved-ref: "6f5f8fda474b759fc05a57115c129cb82243a584"
       url: "https://github.com/Calebh101/localpkg-dart.git"
     source: git
     version: "1.0.0"
@@ -365,8 +365,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: f78031996ea3cb313d64dbd12e7b69011574144e
-      resolved-ref: f78031996ea3cb313d64dbd12e7b69011574144e
+      ref: f571d1665760fcc2fadab376f56b4b4e12ca2f1a
+      resolved-ref: f571d1665760fcc2fadab376f56b4b4e12ca2f1a
       url: "https://github.com/Calebh101/localpkg-flutter-2.git"
     source: git
     version: "2.0.0"

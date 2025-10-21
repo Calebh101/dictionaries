@@ -13,13 +13,13 @@ Now the actual file content. Assume everything is big endian unless otherwise st
 
 ### Header
 
-The header is the first thing, and it's padded to 128 bytes (if I ever need to store more data). The first 10 bytes or so is the magic: `C-DICT` padded by 0s on the right. After this is an unsigned 16-bit integer dictating the header size (if it ever needs to be expanded), and after that is the binary file version. This is a sequence of 5 16-bit signed little endian integers, which are parsed as a `Version` object in the code.
+The header is the first thing, and it's padded to 128 bytes (if I ever need to store more data). The first 10 bytes or so is the magic: `C-DICT` padded by 0s on the right. After this is an unsigned 16-bit integer dictating the header size (if it ever needs to be expanded), and after that is the binary file vehow many root children there are. This isn't really useful, but it's here to stay.rsion. This is a sequence of 5 16-bit signed little endian integers, which are parsed as a `Version` object in the code.
 
 ### Data
 
-After the header and padding is the actual content. The first 8 bytes of the file content tells us how many root children there are. This isn't really useful, but it's here to stay. After this, each root node goes like this:
+After the header and padding is the actual content. The first 8 bytes of the file content tells us the size of the content. After this, each root node goes like this:
 
-- 8 bytes = unsigned integer stating length of entire node, including signature
+- X bytes = dynamic number representing length (see below)
 - 1 byte = signature (see Signatures)
 - Node content (see below)
 
@@ -27,7 +27,7 @@ Use the 8-byte length to determine how long the signature + node content is, the
 
 #### Nodes
 
-After the signature, there is an unsigned 64-bit integer saying how long the attribute data is, then the rest is just raw data.
+After the signature, the rest is just raw data.
 
 ##### Data
 
@@ -54,3 +54,7 @@ The signature is a singular byte that tells you exactly what that node is, and h
 First, the node varient. This is represented by the first 3 bits of the signature, as an unsigned 3-bit integer. `0` is a standard node, `1` is a node key value pair (for dictionaries). Anything other than that does not exist. The next 5 bytes is the node type (like string, array, etcetera). This is 0 and should be ignored if the node is a node key value pair.
 
 Run `dart run bin/signatures.dart` to know all the different signatures.
+
+## Dynamic Numbers
+
+Dynamic numbers are numbers that use a dynamic amount of bytes. They consist of one byte as a signature for the number, and a dynamic amount of bytes afterwards for the content, based on the signature. See the [`DynamicNumber` Documentation](https://github.com/Calebh101/localpkg-dart#dynamic-numbers) for how to parse them.

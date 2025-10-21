@@ -511,8 +511,8 @@ class NodeBinaryManager {
       throw UnimplementedError();
     }
 
-    ByteData lengthData = ByteData(8)..setUint64Safe(0, bytes.length + 1 /* signature */, IntParser.defaultEndian);
-    return [...lengthData.buffer.asUint8List(), signature, ...bytes];
+    DynamicNumber lengthData = DynamicNumber.fromNumber(bytes.length + 1 /* signature */);
+    return [...lengthData.data, signature, ...bytes];
   }
 
   static List<int> nodeToBinary(Node node) {
@@ -614,8 +614,9 @@ class NodeBinaryManager {
     int offset = 0;
 
     while (offset < bytes.length) {
-      int length = bytes.sublist(offset, offset + 8).toUint64();
-      Uint8List child = bytes.sublist(offset + 8, offset + 8 + length);
+      DynamicNumberMode lengthSignature = DynamicNumber.parseSignature(bytes[offset]);
+      int length = lengthSignature.bytes;
+      Uint8List child = bytes.sublist(offset + length + 1, offset + length + 1 + length);
 
       Logger.verbose("Found node data of ${child.length} bytes (expected $length bytes) at offset $offset");
       children.add(nodeDataFromBinary(child));
