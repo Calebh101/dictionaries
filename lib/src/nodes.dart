@@ -571,7 +571,10 @@ class NodeBinaryManager {
       offset++;
     }
 
-    offset += 9; // Get past the null character and length bytes.
+    offset += 1; // Get past the null character.
+    DynamicNumberMode lengthSignature = DynamicNumber.parseSignature(content[offset]);
+    offset += lengthSignature.bytes + 1; // Get past the length signature and data.
+
     Uint8List bytes = content.sublist(offset);
     Logger.verbose("Found bytes: ${bytes.formatBytes(max: 30)} (dictionary: ${getSignature(0, NodeType.map).formatByte()})");
     return NodeKeyValuePair(key: key, value: nodeDataFromBinary(bytes) as Node);
@@ -614,14 +617,15 @@ class NodeBinaryManager {
     int offset = 0;
 
     while (offset < bytes.length) {
+      Logger.verbose("Found new child at offset $offset");
       DynamicNumberMode lengthSignature = DynamicNumber.parseSignature(bytes[offset]);
-      int length = lengthSignature.bytes;
-      Uint8List child = bytes.sublist(offset + length + 1, offset + length + 1 + length);
+      DynamicNumber length = DynamicNumber.fromBytes(bytes.sublist(offset, offset + lengthSignature.bytes + 1));
+      Uint8List child = bytes.sublist(offset + lengthSignature.bytes + 1, offset + lengthSignature.bytes + 1 + length.value.floor());
 
-      Logger.verbose("Found node data of ${child.length} bytes (expected $length bytes) at offset $offset");
+      Logger.verbose("Found node data of ${child.length} bytes (expected ${length.value} bytes) at offset $offset");
       children.add(nodeDataFromBinary(child));
-      offset += 8 + length;
-      Logger.verbose("Children is now at ${children.length}");
+      offset += lengthSignature.bytes + 1 + length.value.floor();
+      Logger.verbose("Children is now at ${children.length} and offset $offset");
     }
 
     return children;
