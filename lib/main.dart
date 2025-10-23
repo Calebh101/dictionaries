@@ -15,7 +15,7 @@ final Version binaryVersion = Version.parse("1.0.0A");
 
 void main() {
   if (kDebugMode) Logger.enable();
-  if (kDebugMode) Logger.setVerbose(true);
+  if (kDebugMode) Logger.setVerbose(false);
   runApp(const MainApp());
 }
 

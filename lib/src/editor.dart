@@ -255,7 +255,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                             if (child is Node) {
                                               children.add(child);
                                             } else if (child is NodeKeyValuePair) {
-                                              children.add(Node(input: child.node.input));
+                                              children.add(child.node);
                                             }
                                           }
 
@@ -388,15 +388,6 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
               },
             ),
           );
-        }
-
-        if (data.node.type == NodeType.map || data.node.type == NodeType.array) {
-          int i = 0;
-
-          for (NodeData child in data.node.children) {
-            child.index = i;
-            i++;
-          }
         }
 
         return SizedBox(

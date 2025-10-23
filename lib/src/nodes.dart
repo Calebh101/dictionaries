@@ -90,7 +90,6 @@ abstract class AllNodeData {
 abstract class NodeData extends AllNodeData {
   List<NodeData> _children;
   String id;
-  int index = 0;
   AllNodeData? parent;
 
   NodeData({List<NodeData>? children, this.parent}) : _children = children ?? [], id = Uuid().v4();
@@ -99,6 +98,15 @@ abstract class NodeData extends AllNodeData {
   Node get node;
   bool get isRoot => false;
   List<NodeData> get children => _children;
+  int get index {
+    if (parent is NodeData) {
+      return (parent as NodeData).children.indexWhere((x) => x.id == id);
+    } else if (parent is RootNode) {
+      return (parent as RootNode).children.indexWhere((x) => x.id == id);
+    } else {
+      return 0;
+    }
+  }
 
   NodeData? getParentAsNodeData() {
     if (parent is NodeData) return parent as NodeData;
