@@ -1,17 +1,21 @@
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
+import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/main.dart';
 import 'package:dictionaries/src/nodes.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:localpkg_flutter/localpkg.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:dictionaries/files/files.dart';
 
 final Version version = Version.parse("0.0.0A");
 final Version binaryVersion = Version.parse("1.0.0A");
+
+Uri? sourceUri;
 
 void main() {
   if (kDebugMode) Logger.enable();
@@ -67,6 +71,7 @@ class _HomeState extends State<Home> {
   static const int download_loading = 0x100;
 
   int status = 0; // I'm a nerd, so we're using bitwise operators for this
+  TextEditingController urlController = TextEditingController();
 
   bool flagSet(int flag) {
     return (status & flag) != 0;
@@ -76,8 +81,8 @@ class _HomeState extends State<Home> {
     setState(() => flags.forEach((flag) => status |= flag));
   }
 
-  bool activateEditor(Uint8List raw) {
-    Widget? widget = decideEditor(raw);
+  bool activateEditor(Uint8List raw, EditorSource source) {
+    Widget? widget = decideEditor(raw, source);
     if (widget == null) return SnackBarManager.show(context, "Invalid file type.").thenReturn(false);
     SimpleNavigator.navigate(context: context, page: EditorMainPage(child: widget), mode: NavigatorMode.pushReplacement);
     return true;
@@ -96,18 +101,64 @@ class _HomeState extends State<Home> {
 
     List<HomeNode> children = [
       HomeOption("Create", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
-        activateEditor(utf8.encode(jsonEncode({})));
+        activateEditor(utf8.encode(jsonEncode({})), EditorSource.created);
       }),
       HomeMenu("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, options: [
         HomeOption("Upload from File", description: "Upload an existing dictionary from a file.", icon: Icons.upload, onActivate: () async {
           var result = await FilePicker.platform.pickFiles(withData: true);
+          SnackBarManager.show(context, "Loading...");
           Uint8List? bytes = result?.files.firstOrNull?.bytes;
-          Logger.print("Found ${bytes?.length ?? -1} bytes");
           if (bytes == null || bytes.isEmpty) return;
-          activateEditor(bytes);
+          activateEditor(bytes, EditorSource.local);
         }),
         HomeOption("Download from Online", description: "Download an existing dictionary to import.", icon: Icons.download, child: flagSet(download_loading) ? CircularProgressIndicator() : null, onActivate: () async {
           if (flagSet(download_loading)) return;
+
+          String? path = await showDialog<String>(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                icon: Icon(Icons.link),
+                title: Text("Download from URL"),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: urlController,
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(onPressed: () {
+                    Navigator.of(context).pop();
+                  }, child: Text("Cancel")),
+                  TextButton(onPressed: () {
+                    Navigator.of(context).pop(urlController.text);
+                  }, child: Text("Done")),
+                ],
+              );
+            },
+          );
+
+          if (path == null) return;
+          Uri? url = Uri.tryParse(path);
+          if (url == null) return SnackBarManager.show(context, "Invalid URL.").toVoid();
+          sourceUri = url;
+
+          SnackBarManager.show(context, "Loading...");
+          setFlags([download_loading]);
+          setState(() {});
+
+          try {
+            var response = await http.get(url);
+            if (!(response.statusCode >= 200 && response.statusCode < 300)) throw Exception("Invalid status code: ${response.statusCode}");
+            var bytes = response.bodyBytes;
+            if (bytes.isEmpty) throw Exception("No data was received.");
+            activateEditor(bytes, EditorSource.online);
+          } catch (e) {
+            Logger.warn("Unable to download file: $e");
+            SnackBarManager.show(context, "Unable to download file: $e");
+          }
         }),
       ]),
     ];
@@ -230,10 +281,10 @@ class _EditorMainPageState extends State<EditorMainPage> {
   }
 }
 
-Widget? decideEditor(Uint8List raw) {
+Widget? decideEditor(Uint8List raw, EditorSource source) {
   var root = RootNode.tryParse(raw);
   if (root == null) return null;
-  return ObjectEditorPage(root: root);
+  return ObjectEditorPage(root: root, source: source);
 }
 
 ({bool value, String string}) returnRecord() {
@@ -281,7 +332,7 @@ class _ScreenTooSmallWidgetState extends State<ScreenTooSmallWidget> {
                 var binary = root.toBinary();
                 Logger.print("Found binary of ${binary.length} bytes, saving...");
                 List<String> name = (result?.names.firstOrNull ?? "MyDictionary").split(".");
-                bool saved = await saveFile(name: name.sublist(0, name.length - 1).join("."), bytes: binary);
+                bool saved = await saveFile(name: name.sublist(0, name.length - 1).join("."), bytes: binary, mime: "application/c-dict", extension: "dictionary");
 
                 if (saved) {
                   Logger.print("File saved.");
@@ -319,4 +370,13 @@ Object? copy(Object? input) {
   } else {
     return input;
   }
+}
+
+String? getFileNameFromResponse(http.Response response) {
+  final contentDisposition = response.headers['content-disposition'];
+  if (contentDisposition == null) return null;
+
+  final regex = RegExp(r'filename="?([^"]+)"?');
+  final match = regex.firstMatch(contentDisposition);
+  return match?.group(1);
 }

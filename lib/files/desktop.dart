@@ -7,8 +7,8 @@ import 'package:file_picker/file_picker.dart';
 Future<bool> saveFile({
   required String name,
   required Uint8List bytes,
-  String extension = "dictionary",
-  String mime = "application/c-dict",
+  required String extension,
+  required String mime,
 }) async {
   String? result = await FilePicker.platform.saveFile(
     dialogTitle: 'Save Dictionary As...',

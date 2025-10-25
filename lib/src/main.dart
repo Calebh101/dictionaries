@@ -53,7 +53,8 @@ String? compileByType(DataType type, RootNode root) {
 
 class ObjectEditorPage extends StatefulWidget {
   final RootNode root;
-  const ObjectEditorPage({super.key, required this.root});
+  final EditorSource source;
+  const ObjectEditorPage({super.key, required this.root, required this.source});
 
   @override
   State<ObjectEditorPage> createState() => _ObjectEditorPageState();
@@ -101,7 +102,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
                   return [
                     ...List.generate(DataType.values.length, (i) {
                       DataType type = DataType.values[i];
-    
+
                       return PopupMenuItem(
                         value: type,
                         child: Text("${dataTypeToPrettyString(type)} Preview"),
@@ -144,12 +145,12 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
 
   Widget objectEditorTabTypeContent(BuildContext context, ObjectEditorTabType objectEditorTabType, RootNode root) {
     RootNode.assignInstance(widget.root);
-    
+
     switch (objectEditorTabType) {
-      case ObjectEditorTabType.base: return ObjectEditorDesktop(key: ValueKey('tab.base'));
+      case ObjectEditorTabType.base: return ObjectEditorDesktop(key: ValueKey('tab.base'), source: widget.source);
       case ObjectEditorTabType.settings: return ObjectEditorSettings(key: ValueKey('tab.settings'));
 
-      default: 
+      default:
         DataType? type = objectEditorTabTypeToObjectType(objectEditorTabType);
         if (type == null) throw Exception("Invalid editor type: $objectEditorTabType");
         return ObjectEditorPreview(type: type, root: root, key: ValueKey("tab.${type.name}"));
@@ -159,7 +160,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
   bool isObjectEditorTabTypePreview(ObjectEditorTabType objectEditorTabType) {
     return objectEditorTabType == ObjectEditorTabType.json || objectEditorTabType == ObjectEditorTabType.yaml || objectEditorTabType == ObjectEditorTabType.plist;
   }
-  
+
   @override
   bool get wantKeepAlive => true;
 }

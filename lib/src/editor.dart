@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as cm;
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
+import 'package:http/http.dart' as http;
 import 'package:localpkg_flutter/localpkg.dart';
 import 'package:menu_bar/menu_bar.dart';
 import 'package:styled_logger/styled_logger.dart';
@@ -18,8 +19,15 @@ List<NodeData> currentExpanded = [];
 bool isCurrentlyShowingMoveUpDownOverlay = false;
 List<MoveUpDownWidget> moveUpDownWidgets = [];
 
+enum EditorSource {
+  local,
+  online,
+  created,
+}
+
 class ObjectEditorDesktop extends StatefulWidget {
-  const ObjectEditorDesktop({super.key});
+  final EditorSource source;
+  const ObjectEditorDesktop({super.key, required this.source});
 
   @override
   State<ObjectEditorDesktop> createState() => _ObjectEditorState();
@@ -68,10 +76,29 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
         BarButton(text: Text("File"), submenu: SubMenu(menuItems: [
           MenuButton(text: Text("Export As..."), submenu: SubMenu(menuItems: [
             MenuButton(text: Text("Export as Dictionary"), onTap: () async {
-              bool result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary());
+              bool result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary(), mime: "application/c-dict", extension: "dictionary");
               if (result == false) return;
               SnackBarManager.show(context, "Saved file to $currentFileName!");
             }),
+            if (widget.source == EditorSource.online && sourceUri != null)
+            ...[
+              MenuDivider(),
+              MenuButton(text: Text("Download Original File"), onTap: () async {
+                try {
+                  SnackBarManager.show(context, "Loading...");
+                  var response = await http.get(sourceUri!);
+                  if (!(response.statusCode >= 200 && response.statusCode < 300)) throw Exception("Invalid status code: ${response.statusCode}");
+                  var bytes = response.bodyBytes;
+                  if (bytes.isEmpty) throw Exception("No data was received.");
+                  var name = (getFileNameFromResponse(response) ?? sourceUri!.pathSegments.lastOrNull ?? "filename").split(".");
+                  Logger.print("Found name of $name");
+                  saveFile(name: name.length <= 1 ? name.first : name.sublist(0, name.length - 1).join("."), bytes: bytes, mime: response.headers["content-type"] ?? "", extension: name.lastOrNull ?? "");
+                } catch (e) {
+                  Logger.warn("Unable to download file: $e");
+                  SnackBarManager.show(context, "Unable to download file: $e");
+                }
+              }),
+            ],
           ])),
           MenuDivider(),
           MenuButton(text: Text("Return to Home"), onTap: () async {
