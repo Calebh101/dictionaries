@@ -1,9 +1,23 @@
 <h1 align="center">Dictionaries</h1>
 <p align="center">Dictionaries is a tool to view and edit data files like JSON, YAML, and more in a user-friendly and intuitive tree view.</p>
 
+<p align="center">
+  <a href="https://github.com/Calebh101/dictionaries/actions/workflows/pages.yml">
+    <img src="https://github.com/Calebh101/dictionaries/actions/workflows/pages.yml/badge.svg">
+  </a>
+</p>
+
+Hello, and welcome to Dictionaries! This is a cross-platform tool to view your "dictionaries", which are files like YAML, JSON, PList, my custom file type, `.dictionary`, and potentially more to come.
+
+When you first open it up, you will get one of two screens:
+- If you're on a small device, or the window is too small, you won't be able to use Dictionaries. However, I included a function to turn a file into a `.dictionary`.
+- Otherwise, you'll see multiple options of how to open a new file; either by uploading your own, downloading one from the Internet, or by creating a new dictionary.
+
+After this, you'll get an editor window. At the top you'll have some tabs; to start, you'll have the actual editor (represented by a pen icon) and a project window (represented by a gear icon). To unlock more tabs, get Dictionaries Plus. Nah, just click the Plus icon in the right of the tab bar to add a preview of a text file type like JSON, PList, etcetera.
+
 # Binary File Format
 
-With this new app came a new file type: `application/c-dict`, or `.dictionary`. This is where I'm gonna document all of it.
+With this new app came a new file type: `application/c-dict`, or `.dictionary`. This is where I'm gonna document all of it, for people who'd like to parse it in their own projects.
 
 First, the naming. The MIME type is `application/c-dict`, because I feel like `application/dictionary` could collide with a different program. The file extension is typically `.dictionary`, but `.c-dict` is also accepted.
 
