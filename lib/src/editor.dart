@@ -353,6 +353,9 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
         bool hasKey = false;
         Widget? keyWidget;
 
+        double fontSize = 14;
+        double height = 22;
+
         if (!formControllers.containsKey(data.id)) {
           formControllers[data.id] = (controller: TextEditingController(text: data.node.valueToString()), key: GlobalKey());
         }
@@ -374,9 +377,11 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
             key: keyControllers[data.id]!.key,
             child: TextFormField(
               controller: keyControllers[data.id]!.controller,
+              style: TextStyle(fontSize: fontSize),
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
+                errorStyle: TextStyle(fontSize: fontSize - 3)
               ),
               onChanged: (value) {
                 (keyControllers[data.id]!.key.currentState as FormState).save();
@@ -418,7 +423,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
         }
 
         return SizedBox(
-          height: 30,
+          height: height,
           child: TreeDragTarget<NodeData>(
             node: data,
             onWillAcceptWithDetails: (details) {
@@ -556,7 +561,7 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                               late Widget valueChild;
 
                               if (data.node.type == NodeType.boolean) {
-                                valueChild = DropdownButton<bool>(isDense: true, value: data.node.input as bool, items: [
+                                valueChild = DropdownButton<bool>(isDense: true, style: TextStyle(fontSize: fontSize), value: data.node.input as bool, items: [
                                   DropdownMenuItem(child: Text("True"), value: true),
                                   DropdownMenuItem(child: Text("False"), value: false),
                                 ], onChanged: (value) {
@@ -578,17 +583,19 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                   setState(() {});
                                 });
                               } else if (data.node.isParentType > 0) {
-                                valueChild = SelectableText("${data.node.children.length} ${Word.fromCount(data.node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}");
+                                valueChild = SelectableText("${data.node.children.length} ${Word.fromCount(data.node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}", style: TextStyle(fontSize: fontSize));
                               } else if (data.node.type == NodeType.empty) {
-                                valueChild = Text("Null");
+                                valueChild = Text("Null", style: TextStyle(fontSize: fontSize));
                               } else {
                                 valueChild = Form(
                                   key: formControllers[data.id]!.key,
                                   child: TextFormField(
                                     controller: formControllers[data.id]!.controller,
+                                    style: TextStyle(fontSize: fontSize),
                                     decoration: InputDecoration(
                                       isDense: true,
                                       border: InputBorder.none,
+                                      errorStyle: TextStyle(fontSize: fontSize - 3),
                                     ),
                                     onChanged: (source) {
                                       Logger.print("Editing complete");
@@ -602,8 +609,6 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
                                       var value = get(source);
                                       if (value == null) return;
                                       Logger.print("Found value of type ${value.runtimeType}...");
-
-
 
                                       var change = Change<Object?>(
                                         copy(data.node.input),
@@ -1060,7 +1065,6 @@ class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
     return Center(
       child: Column(
         children: [
-          SizedBox(height: 3),
           SizedBox(child: Icon(Icons.arrow_upward, size: size), height: size - 5),
           SizedBox(child: Icon(Icons.arrow_downward, size: size), height: size - 5),
         ],

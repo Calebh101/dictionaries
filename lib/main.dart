@@ -103,7 +103,7 @@ class _HomeState extends State<Home> {
       HomeOption("Create", description: "Create a new dictionary.", icon: Icons.add, onActivate: () async {
         activateEditor(utf8.encode(jsonEncode({})), EditorSource.created);
       }),
-      HomeMenu("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, options: [
+      HomeMenu("Upload", description: "Upload an existing dictionary.", icon: Icons.upload, child: flagSet(download_loading) ? CircularProgressIndicator() : null, options: [
         HomeOption("Upload from File", description: "Upload an existing dictionary from a file.", icon: Icons.upload, onActivate: () async {
           var result = await FilePicker.platform.pickFiles(withData: true);
           SnackBarManager.show(context, "Loading...");
