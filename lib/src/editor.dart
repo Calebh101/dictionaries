@@ -5,6 +5,7 @@ import 'package:dictionaries/src/nodeenums.dart';
 import 'package:dictionaries/src/nodes.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as cm;
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:http/http.dart' as http;
@@ -26,11 +27,12 @@ enum EditorSource {
 }
 
 class ObjectEditorDesktop extends StatefulWidget {
+  late _ObjectEditorState state;
   final EditorSource source;
-  const ObjectEditorDesktop({super.key, required this.source});
+  ObjectEditorDesktop({super.key, required this.source});
 
   @override
-  State<ObjectEditorDesktop> createState() => _ObjectEditorState();
+  State<ObjectEditorDesktop> createState() => state = _ObjectEditorState();
 }
 
 class _ObjectEditorState extends State<ObjectEditorDesktop> {
@@ -71,6 +73,8 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
 
   @override
   Widget build(BuildContext context) {
+    var intents = EditorIntent.generateAll(context, widget);
+
     return MenuBarWidget(
       barButtons: [
         BarButton(text: Text("File"), submenu: SubMenu(menuItems: [
@@ -111,785 +115,804 @@ class _ObjectEditorState extends State<ObjectEditorDesktop> {
           MenuButton(text: Text("Undo"), onTap: changes.canUndo ? () {
             changes.undo();
             refresh(rebuild: true);
-          } : null),
+          } : null, shortcut: SingleActivator(LogicalKeyboardKey.keyZ, control: true)),
           MenuButton(text: Text("Redo"), onTap: changes.canRedo ? () {
             changes.redo();
             refresh(rebuild: true);
-          } : null),
+          } : null, shortcut: SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true)),
         ]))
       ],
-      child: AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
-        if (entry.node.isRoot) {
-          Node node = entry.node as Node;
-          RootNode root = node.input as RootNode;
+      child: Shortcuts(
+        shortcuts: () {
+          Map<LogicalKeySet, EditorIntent> results = {};
 
-          List<cm.ContextMenuEntry> contextMenuEntries = [
-            cm.MenuItem(label: "New Child", icon: Icons.add, onSelected: () {
-              Node newNode = Node(input: "New String");
-              NodeData newData = root.type == RootNodeType.map ? NodeKeyValuePair(key: "New String", value: newNode) : newNode;
+          for (var intent in intents.map((x) => x.toShortcut()?.entries.first)) {
+            if (intent == null) continue;
+            results[intent.key] = intent.value;
+          }
 
-              var change = Change<String>(
-                newData.id,
-                () {
-                  entry.node.children.add(newData);
-                  Logger.print("Added child ${newData.runtimeType} (currently ${entry.node.children.length} children)");
+          return results;
+        }(),
+        child: Actions(
+          actions: {
+            EditorIntent: CallbackAction<EditorIntent>(onInvoke: (intent) {
+              return intent.onActivate();
+            },)
+          },
+          child: AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
+            if (entry.node.isRoot) {
+              Node node = entry.node as Node;
+              RootNode root = node.input as RootNode;
+
+              List<cm.ContextMenuEntry> contextMenuEntries = [
+                cm.MenuItem(label: "New Child", icon: Icons.add, onSelected: () {
+                  Node newNode = Node(input: "New String");
+                  NodeData newData = root.type == RootNodeType.map ? NodeKeyValuePair(key: "New String", value: newNode) : newNode;
+
+                  var change = Change<String>(
+                    newData.id,
+                    () {
+                      entry.node.children.add(newData);
+                      Logger.print("Added child ${newData.runtimeType} (currently ${entry.node.children.length} children)");
+                      refresh(rebuild: true);
+                    },
+                    (id) {
+                      entry.node.children.removeWhere((x) => x.id == id);
+                      Logger.print("Removed child $id (currently ${entry.node.children.length} children)");
+                      refresh(rebuild: true);
+                    }
+                  );
+
+                  changes.add(change);
                   refresh(rebuild: true);
-                },
-                (id) {
-                  entry.node.children.removeWhere((x) => x.id == id);
-                  Logger.print("Removed child $id (currently ${entry.node.children.length} children)");
-                  refresh(rebuild: true);
-                }
-              );
+                }),
+              ];
 
-              changes.add(change);
-              refresh(rebuild: true);
-            }),
-          ];
+              return TreeDragTarget<NodeData>(
+                node: node,
+                onWillAcceptWithDetails: (details) => true,
+                onNodeAccepted: (details) {
+                  NodeData dragged = details.draggedNode;
+                  AllNodeData oldParent = details.draggedNode.parent!;
 
-          return TreeDragTarget<NodeData>(
-            node: node,
-            onWillAcceptWithDetails: (details) => true,
-            onNodeAccepted: (details) {
-              NodeData dragged = details.draggedNode;
-              AllNodeData oldParent = details.draggedNode.parent!;
+                  late void Function() changeFunction;
+                  late int changeIndex;
 
-              late void Function() changeFunction;
-              late int changeIndex;
-
-              if (oldParent is NodeData) {
-                Logger.print("Dragging ${dragged.id} to new parent ${details.targetNode.id} from parent ${oldParent.id}");
-
-                changeFunction = () {
-                  changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
-                  oldParent.children.removeAt(changeIndex);
-                  refresh(rebuild: true);
-                };
-              } else if (oldParent is RootNode) {
-                Logger.print("Dragging ${dragged.id} to new parent root");
-                if (details.targetNode.isRoot) return;
-
-                changeFunction = () {
-                  changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
-                  oldParent.children.removeAt(changeIndex);
-                  refresh(rebuild: true);
-                };
-              } else {
-                throw UnimplementedError();
-              }
-
-              var change = Change<TreeDragAndDropDetails<NodeData>>(
-                details,
-                () {
-                  changeFunction.call();
-                  dragged.parent = details.targetNode;
-                  details.targetNode.children.add(dragged);
-                },
-                (old) {
                   if (oldParent is NodeData) {
-                    oldParent.children.insert(changeIndex, details.draggedNode);
+                    Logger.print("Dragging ${dragged.id} to new parent ${details.targetNode.id} from parent ${oldParent.id}");
+
+                    changeFunction = () {
+                      changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
+                      oldParent.children.removeAt(changeIndex);
+                      refresh(rebuild: true);
+                    };
                   } else if (oldParent is RootNode) {
-                    oldParent.children.insert(changeIndex, details.draggedNode);
+                    Logger.print("Dragging ${dragged.id} to new parent root");
+                    if (details.targetNode.isRoot) return;
+
+                    changeFunction = () {
+                      changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
+                      oldParent.children.removeAt(changeIndex);
+                      refresh(rebuild: true);
+                    };
+                  } else {
+                    throw UnimplementedError();
                   }
 
-                  dragged.parent = old.draggedNode.parent;
-                  old.targetNode.children.removeWhere((x) => x.id == dragged.id);
+                  var change = Change<TreeDragAndDropDetails<NodeData>>(
+                    details,
+                    () {
+                      changeFunction.call();
+                      dragged.parent = details.targetNode;
+                      details.targetNode.children.add(dragged);
+                    },
+                    (old) {
+                      if (oldParent is NodeData) {
+                        oldParent.children.insert(changeIndex, details.draggedNode);
+                      } else if (oldParent is RootNode) {
+                        oldParent.children.insert(changeIndex, details.draggedNode);
+                      }
+
+                      dragged.parent = old.draggedNode.parent;
+                      old.targetNode.children.removeWhere((x) => x.id == dragged.id);
+                      refresh(rebuild: true);
+                    },
+                  );
+
+                  changes.add(change);
                   refresh(rebuild: true);
                 },
+                builder: (context, details) {
+                  var contextMenu = cm.ContextMenu(entries: contextMenuEntries);
+
+                  return InkWell(
+                    child: Padding(
+                      padding: const EdgeInsets.all(0),
+                      child: TreeIndentation(
+                        child: Row(
+                          children: [
+                            ExpandIcon(
+                              size: 24,
+                              padding: EdgeInsets.zero,
+                              isExpanded: entry.isExpanded,
+                              onPressed: (value) => controller.toggleExpansion(node),
+                            ),
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  double maxWidth = MediaQuery.of(context).size.width;
+                                  double width2 = 100;
+                                  double width3 = maxWidth * 0.3;
+                                  double width1 = constraints.maxWidth - width2 - width3;
+
+                                  return Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      SizedBox(
+                                        width: width1,
+                                        child: SelectableText("Root", textAlign: TextAlign.left),
+                                      ),
+                                      SizedBox(
+                                        width: width3,
+                                        child: SelectableText("${node.children.length} ${Word.fromCount(node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}"),
+                                      ),
+                                      SizedBox(
+                                        width: width2,
+                                        child: DropdownButton<RootNodeType>(items: RootNodeType.values.map((type) {
+                                          return DropdownMenuItem<RootNodeType>(
+                                            alignment: AlignmentGeometry.center,
+                                            value: type,
+                                            child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
+                                          );
+                                        }).toList(), onChanged: (type) {
+                                          if (type == null) return;
+                                          if (type == root.type) return;
+
+                                          late void Function() change;
+                                          late void Function(({RootNodeType type, Iterable<NodeData> children}) r) undo;
+
+                                          var old = (
+                                            type: root.type,
+                                            children: List<NodeData>.from(root.children),
+                                          );
+
+                                          root.type = type;
+                                          Logger.print("Set root type to ${root.type}");
+
+                                          if (type == RootNodeType.map) {
+                                            change = () {
+                                              List<NodeKeyValuePair> children = [];
+
+                                              for (NodeData child in root.children) {
+                                                if (child is Node) {
+                                                  children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
+                                                } else if (child is NodeKeyValuePair) {
+                                                  children.add(child);
+                                                }
+                                              }
+
+                                              root.children.clear();
+                                              for (var child in children) root.children.add(child);
+                                              refresh(rebuild: true);
+                                            };
+                                          } else if (type == RootNodeType.array) {
+                                            change = () {
+                                              List<Node> children = [];
+
+                                              for (NodeData child in root.children) {
+                                                if (child is Node) {
+                                                  children.add(child);
+                                                } else if (child is NodeKeyValuePair) {
+                                                  children.add(child.node);
+                                                }
+                                              }
+
+                                              root.children.clear();
+                                              for (var child in children) root.children.add(child);
+                                              refresh(rebuild: true);
+                                            };
+                                          }
+
+                                          undo = (r) {
+                                            Logger.print("Restoring root data: $r");
+                                            root.type = r.type;
+                                            root.children.clear();
+
+                                            for (var child in r.children) {
+                                              root.children.add(child);
+                                            }
+
+                                            Logger.print("Added ${root.children.length} children from ${r.children.length} provided");
+                                            refresh(rebuild: true);
+                                          };
+
+                                          var changeData = Change<({RootNodeType type, Iterable<NodeData> children})>(
+                                            old,
+                                            change,
+                                            undo,
+                                          );
+
+                                          changes.add(changeData);
+                                          refresh();
+                                        }, value: root.type),
+                                      ),
+                                    ],
+                                  );
+                                }
+                              ),
+                            ),
+                            Builder(
+                              builder: (context) {
+                                return IconButton(onPressed: () async {
+                                  var box = context.findRenderObject() as RenderBox;
+                                  var pos = box.localToGlobal(Offset.zero);
+                                  var previous = contextMenu.position == null ? null : Offset(contextMenu.position!.dx, contextMenu.position!.dy);
+                                  contextMenu.position = pos;
+                                  await contextMenu.show(context);
+                                  contextMenu.position = previous;
+                                }, icon: Icon(Icons.more_vert), padding: EdgeInsets.zero);
+                              }
+                            ),
+                            SizedBox(width: 40),
+                          ],
+                        ),
+                        guide: IndentGuide.connectingLines(
+                          indent: 24,
+                          thickness: 1,
+                          color: Colors.grey,
+                        ),
+                        entry: entry,
+                      ),
+                    ),
+                  );
+                }
               );
+            }
 
-              changes.add(change);
-              refresh(rebuild: true);
-            },
-            builder: (context, details) {
-              var contextMenu = cm.ContextMenu(entries: contextMenuEntries);
+            NodeData data = entry.node;
+            String title = "Unknown";
+            bool hasKey = false;
+            Widget? keyWidget;
 
-              return InkWell(
-                child: Padding(
-                  padding: const EdgeInsets.all(0),
-                  child: TreeIndentation(
-                    child: Row(
-                      children: [
-                        ExpandIcon(
-                          size: 24,
-                          padding: EdgeInsets.zero,
-                          isExpanded: entry.isExpanded,
-                          onPressed: (value) => controller.toggleExpansion(node),
-                        ),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              double maxWidth = MediaQuery.of(context).size.width;
-                              double width2 = 100;
-                              double width3 = maxWidth * 0.3;
-                              double width1 = constraints.maxWidth - width2 - width3;
+            double fontSize = 14;
+            double height = 22;
 
-                              return Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  SizedBox(
-                                    width: width1,
-                                    child: SelectableText("Root", textAlign: TextAlign.left),
-                                  ),
-                                  SizedBox(
-                                    width: width3,
-                                    child: SelectableText("${node.children.length} ${Word.fromCount(node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}"),
-                                  ),
-                                  SizedBox(
-                                    width: width2,
-                                    child: DropdownButton<RootNodeType>(items: RootNodeType.values.map((type) {
-                                      return DropdownMenuItem<RootNodeType>(
-                                        alignment: AlignmentGeometry.center,
-                                        value: type,
-                                        child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
-                                      );
-                                    }).toList(), onChanged: (type) {
-                                      if (type == null) return;
-                                      if (type == root.type) return;
+            if (!formControllers.containsKey(data.id)) {
+              formControllers[data.id] = (controller: TextEditingController(text: data.node.valueToString()), key: GlobalKey());
+            }
 
-                                      late void Function() change;
-                                      late void Function(({RootNodeType type, Iterable<NodeData> children}) r) undo;
+            if (data is Node) {
+              title = data.index.toString();
+            }
 
-                                      var old = (
-                                        type: root.type,
-                                        children: List<NodeData>.from(root.children),
-                                      );
+            if (data is NodeKeyValuePair) {
+              hasKey = true;
+              title = data.key;
+            }
 
-                                      root.type = type;
-                                      Logger.print("Set root type to ${root.type}");
+            if (hasKey) {
+              NodeKeyValuePair nkvp = data as NodeKeyValuePair;
+              if (!keyControllers.containsKey(data.id)) keyControllers[data.id] = (controller: TextEditingController(text: nkvp.key), key: GlobalKey());
 
-                                      if (type == RootNodeType.map) {
-                                        change = () {
-                                          List<NodeKeyValuePair> children = [];
-
-                                          for (NodeData child in root.children) {
-                                            if (child is Node) {
-                                              children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
-                                            } else if (child is NodeKeyValuePair) {
-                                              children.add(child);
-                                            }
-                                          }
-
-                                          root.children.clear();
-                                          for (var child in children) root.children.add(child);
-                                          refresh(rebuild: true);
-                                        };
-                                      } else if (type == RootNodeType.array) {
-                                        change = () {
-                                          List<Node> children = [];
-
-                                          for (NodeData child in root.children) {
-                                            if (child is Node) {
-                                              children.add(child);
-                                            } else if (child is NodeKeyValuePair) {
-                                              children.add(child.node);
-                                            }
-                                          }
-
-                                          root.children.clear();
-                                          for (var child in children) root.children.add(child);
-                                          refresh(rebuild: true);
-                                        };
-                                      }
-
-                                      undo = (r) {
-                                        Logger.print("Restoring root data: $r");
-                                        root.type = r.type;
-                                        root.children.clear();
-
-                                        for (var child in r.children) {
-                                          root.children.add(child);
-                                        }
-
-                                        Logger.print("Added ${root.children.length} children from ${r.children.length} provided");
-                                        refresh(rebuild: true);
-                                      };
-
-                                      var changeData = Change<({RootNodeType type, Iterable<NodeData> children})>(
-                                        old,
-                                        change,
-                                        undo,
-                                      );
-
-                                      changes.add(changeData);
-                                      refresh();
-                                    }, value: root.type),
-                                  ),
-                                ],
-                              );
-                            }
-                          ),
-                        ),
-                        Builder(
-                          builder: (context) {
-                            return IconButton(onPressed: () async {
-                              var box = context.findRenderObject() as RenderBox;
-                              var pos = box.localToGlobal(Offset.zero);
-                              var previous = contextMenu.position == null ? null : Offset(contextMenu.position!.dx, contextMenu.position!.dy);
-                              contextMenu.position = pos;
-                              await contextMenu.show(context);
-                              contextMenu.position = previous;
-                            }, icon: Icon(Icons.more_vert), padding: EdgeInsets.zero);
-                          }
-                        ),
-                        SizedBox(width: 40),
-                      ],
-                    ),
-                    guide: IndentGuide.connectingLines(
-                      indent: 24,
-                      thickness: 1,
-                      color: Colors.grey,
-                    ),
-                    entry: entry,
+              keyWidget = Form(
+                key: keyControllers[data.id]!.key,
+                child: TextFormField(
+                  controller: keyControllers[data.id]!.controller,
+                  style: TextStyle(fontSize: fontSize),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    errorStyle: TextStyle(fontSize: fontSize - 3)
                   ),
+                  onChanged: (value) {
+                    (keyControllers[data.id]!.key.currentState as FormState).save();
+                  },
+                  onSaved: (source) {
+                    if (source == null) return;
+                    bool result = (keyControllers[data.id]!.key.currentState as FormState).validate();
+                    if (result == false) return;
+
+                    var change = Change<String>(
+                      data.key,
+                      () => debug(() => data.key = source),
+                      (old) => debug(() {
+                        data.key = old;
+                        keyControllers[data.id]?.controller.text = old;
+                        refresh(rebuild: true);
+                      }),
+                    );
+
+                    changes.add(change);
+                    Logger.print("Setting key with change ${change.runtimeType}...");
+                    setState(() {});
+                  },
+                  validator: (value) {
+                    if (value == null) return "Value cannot be empty.";
+                    AllNodeData? parent = data.parent;
+                    Logger.print("Found parent of type ${parent.runtimeType}");
+
+                    if (parent is NodeData) {
+                      if (parent.children.whereType<NodeKeyValuePair>().any((x) => x.key == value && x.id == data.id)) return "This key already exists.";
+                    } else if (parent is RootNode) {
+                      if (parent.children.whereType<NodeKeyValuePair>().any((x) => x.key == value && x.id == data.id)) return "This key already exists.";
+                    }
+
+                    return null;
+                  },
                 ),
               );
             }
-          );
-        }
 
-        NodeData data = entry.node;
-        String title = "Unknown";
-        bool hasKey = false;
-        Widget? keyWidget;
-
-        double fontSize = 14;
-        double height = 22;
-
-        if (!formControllers.containsKey(data.id)) {
-          formControllers[data.id] = (controller: TextEditingController(text: data.node.valueToString()), key: GlobalKey());
-        }
-
-        if (data is Node) {
-          title = data.index.toString();
-        }
-
-        if (data is NodeKeyValuePair) {
-          hasKey = true;
-          title = data.key;
-        }
-
-        if (hasKey) {
-          NodeKeyValuePair nkvp = data as NodeKeyValuePair;
-          if (!keyControllers.containsKey(data.id)) keyControllers[data.id] = (controller: TextEditingController(text: nkvp.key), key: GlobalKey());
-
-          keyWidget = Form(
-            key: keyControllers[data.id]!.key,
-            child: TextFormField(
-              controller: keyControllers[data.id]!.controller,
-              style: TextStyle(fontSize: fontSize),
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                errorStyle: TextStyle(fontSize: fontSize - 3)
-              ),
-              onChanged: (value) {
-                (keyControllers[data.id]!.key.currentState as FormState).save();
-              },
-              onSaved: (source) {
-                if (source == null) return;
-                bool result = (keyControllers[data.id]!.key.currentState as FormState).validate();
-                if (result == false) return;
-
-                var change = Change<String>(
-                  data.key,
-                  () => debug(() => data.key = source),
-                  (old) => debug(() {
-                    data.key = old;
-                    keyControllers[data.id]?.controller.text = old;
-                    refresh(rebuild: true);
-                  }),
-                );
-
-                changes.add(change);
-                Logger.print("Setting key with change ${change.runtimeType}...");
-                setState(() {});
-              },
-              validator: (value) {
-                if (value == null) return "Value cannot be empty.";
-                AllNodeData? parent = data.parent;
-                Logger.print("Found parent of type ${parent.runtimeType}");
-
-                if (parent is NodeData) {
-                  if (parent.children.whereType<NodeKeyValuePair>().any((x) => x.key == value && x.id == data.id)) return "This key already exists.";
-                } else if (parent is RootNode) {
-                  if (parent.children.whereType<NodeKeyValuePair>().any((x) => x.key == value && x.id == data.id)) return "This key already exists.";
-                }
-
-                return null;
-              },
-            ),
-          );
-        }
-
-        return SizedBox(
-          height: height,
-          child: TreeDragTarget<NodeData>(
-            node: data,
-            onWillAcceptWithDetails: (details) {
-              return data.node.type == NodeType.map || data.node.type == NodeType.array;
-            },
-            onNodeAccepted: (details) {
-              NodeData dragged = details.draggedNode;
-              AllNodeData oldParent = details.draggedNode.parent!;
-
-              late void Function() changeFunction;
-              late int changeIndex;
-
-              if (oldParent is NodeData) {
-                Logger.print("Dragging ${dragged.id} to new parent ${details.targetNode.id} from parent ${oldParent.id}");
-                if (oldParent.id == details.targetNode.id) return;
-
-                changeFunction = () {
-                  changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
-                  oldParent.children.removeAt(changeIndex);
-                  refresh(rebuild: true);
-                };
-              } else if (oldParent is RootNode) {
-                Logger.print("Dragging ${dragged.id} to new parent root");
-                if (details.targetNode.isRoot) return;
-
-                changeFunction = () {
-                  changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
-                  oldParent.children.removeAt(changeIndex);
-                  refresh(rebuild: true);
-                };
-              } else {
-                throw UnimplementedError();
-              }
-
-              var change = Change<TreeDragAndDropDetails<NodeData>>(
-                details,
-                () {
-                  changeFunction.call();
-                  dragged.parent = details.targetNode;
-                  details.targetNode.children.add(dragged);
+            return SizedBox(
+              height: height,
+              child: TreeDragTarget<NodeData>(
+                node: data,
+                onWillAcceptWithDetails: (details) {
+                  return data.node.type == NodeType.map || data.node.type == NodeType.array;
                 },
-                (old) {
+                onNodeAccepted: (details) {
+                  NodeData dragged = details.draggedNode;
+                  AllNodeData oldParent = details.draggedNode.parent!;
+
+                  late void Function() changeFunction;
+                  late int changeIndex;
+
                   if (oldParent is NodeData) {
-                    oldParent.children.insert(changeIndex, details.draggedNode);
+                    Logger.print("Dragging ${dragged.id} to new parent ${details.targetNode.id} from parent ${oldParent.id}");
+                    if (oldParent.id == details.targetNode.id) return;
+
+                    changeFunction = () {
+                      changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
+                      oldParent.children.removeAt(changeIndex);
+                      refresh(rebuild: true);
+                    };
                   } else if (oldParent is RootNode) {
-                    oldParent.children.insert(changeIndex, details.draggedNode);
+                    Logger.print("Dragging ${dragged.id} to new parent root");
+                    if (details.targetNode.isRoot) return;
+
+                    changeFunction = () {
+                      changeIndex = oldParent.children.indexWhere((x) => x.id == dragged.id);
+                      oldParent.children.removeAt(changeIndex);
+                      refresh(rebuild: true);
+                    };
+                  } else {
+                    throw UnimplementedError();
                   }
 
-                  dragged.parent = old.draggedNode.parent;
-                  old.targetNode.children.removeWhere((x) => x.id == dragged.id);
+                  var change = Change<TreeDragAndDropDetails<NodeData>>(
+                    details,
+                    () {
+                      changeFunction.call();
+                      dragged.parent = details.targetNode;
+                      details.targetNode.children.add(dragged);
+                    },
+                    (old) {
+                      if (oldParent is NodeData) {
+                        oldParent.children.insert(changeIndex, details.draggedNode);
+                      } else if (oldParent is RootNode) {
+                        oldParent.children.insert(changeIndex, details.draggedNode);
+                      }
+
+                      dragged.parent = old.draggedNode.parent;
+                      old.targetNode.children.removeWhere((x) => x.id == dragged.id);
+                      refresh(rebuild: true);
+                    },
+                  );
+
+                  changes.add(change);
                   refresh(rebuild: true);
                 },
-              );
+                builder: (context, details) {
+                  Color getExpandIconColor() {
+                    return switch (Theme.brightnessOf(context)) {
+                      Brightness.light => Colors.black54,
+                      Brightness.dark => Colors.white60,
+                    };
+                  }
 
-              changes.add(change);
-              refresh(rebuild: true);
-            },
-            builder: (context, details) {
-              Color getExpandIconColor() {
-                return switch (Theme.brightnessOf(context)) {
-                  Brightness.light => Colors.black54,
-                  Brightness.dark => Colors.white60,
-                };
-              }
-
-              return InkWell(
-                child: Padding(
-                  padding: const EdgeInsets.all(0),
-                  child: TreeIndentation(
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          child: data.children.isNotEmpty ? ExpandIcon(
-                            padding: EdgeInsets.zero,
-                            isExpanded: entry.isExpanded,
-                            color: getExpandIconColor(),
-                            onPressed: (value) => controller.toggleExpansion(entry.node),
-                          ) : (data.node.isParentType > 0 ? IconButton(
-                            onPressed: () {},
-                            padding: EdgeInsets.zero,
-                            color: getExpandIconColor(),
-                            icon: Icon(Icons.remove),
-                          ) : null),
-                        ),
-                        TreeDraggable<NodeData>(
-                          node: data,
-                          feedback: Material(
-                            elevation: 4,
-                            color: Colors.transparent,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              child: Text(title),
+                  return InkWell(
+                    child: Padding(
+                      padding: const EdgeInsets.all(0),
+                      child: TreeIndentation(
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 40,
+                              child: data.children.isNotEmpty ? ExpandIcon(
+                                padding: EdgeInsets.zero,
+                                isExpanded: entry.isExpanded,
+                                color: getExpandIconColor(),
+                                onPressed: (value) => controller.toggleExpansion(entry.node),
+                              ) : (data.node.isParentType > 0 ? IconButton(
+                                onPressed: () {},
+                                padding: EdgeInsets.zero,
+                                color: getExpandIconColor(),
+                                icon: Icon(Icons.remove),
+                              ) : null),
                             ),
-                          ),
-                          child: IconButton(onPressed: () {}, icon: Icon(Icons.drag_handle), padding: EdgeInsets.symmetric(vertical: 0, horizontal: 8)),
-                        ),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              double maxWidth = MediaQuery.of(context).size.width;
-                              double width2 = 100;
-                              double width3 = maxWidth * 0.3;
-                              double width1 = constraints.maxWidth - width2 - width3 - 48 - 36;
+                            TreeDraggable<NodeData>(
+                              node: data,
+                              feedback: Material(
+                                elevation: 4,
+                                color: Colors.transparent,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text(title),
+                                ),
+                              ),
+                              child: IconButton(onPressed: () {}, icon: Icon(Icons.drag_handle), padding: EdgeInsets.symmetric(vertical: 0, horizontal: 8)),
+                            ),
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  double maxWidth = MediaQuery.of(context).size.width;
+                                  double width2 = 100;
+                                  double width3 = maxWidth * 0.3;
+                                  double width1 = constraints.maxWidth - width2 - width3 - 48 - 36;
 
-                              Object? get(String source) {
-                                switch (data.node.type) {
-                                  case NodeType.string: return source;
-                                  case NodeType.number: return int.tryParse(source) ?? double.tryParse(source);
-                                  case NodeType.boolean: return bool.tryParse(source);
-                                  case NodeType.date: return AnyDate().tryParse(source);
+                                  Object? get(String source) {
+                                    switch (data.node.type) {
+                                      case NodeType.string: return source;
+                                      case NodeType.number: return int.tryParse(source) ?? double.tryParse(source);
+                                      case NodeType.boolean: return bool.tryParse(source);
+                                      case NodeType.date: return AnyDate().tryParse(source);
 
-                                  case NodeType.data:
-                                    source = source.trim().replaceAll(RegExp("0x", caseSensitive: false), "").replaceAll(RegExp("[^a-zA-Z0-9]"), "").toUpperCase();
-                                    if (RegExp("[^A-F0-9]").hasMatch(source)) return null;
-                                    if (source.length % 2 != 0) source = "0$source";
+                                      case NodeType.data:
+                                        source = source.trim().replaceAll(RegExp("0x", caseSensitive: false), "").replaceAll(RegExp("[^a-zA-Z0-9]"), "").toUpperCase();
+                                        if (RegExp("[^A-F0-9]").hasMatch(source)) return null;
+                                        if (source.length % 2 != 0) source = "0$source";
 
-                                    int i = 0;
-                                    List<int> bytes = [];
+                                        int i = 0;
+                                        List<int> bytes = [];
 
-                                    while (i < source.length) {
-                                      if (i + 2 > source.length) return null;
-                                      String byte = source.substring(i, i + 2);
-                                      int? value = int.tryParse(byte, radix: 16);
-                                      if (value != null) bytes.add(value);
-                                      i += 2;
+                                        while (i < source.length) {
+                                          if (i + 2 > source.length) return null;
+                                          String byte = source.substring(i, i + 2);
+                                          int? value = int.tryParse(byte, radix: 16);
+                                          if (value != null) bytes.add(value);
+                                          i += 2;
+                                        }
+
+                                        return Uint8List.fromList(bytes);
+
+                                      default: return null;
                                     }
+                                  }
 
-                                    return Uint8List.fromList(bytes);
+                                  late Widget valueChild;
 
-                                  default: return null;
-                                }
-                              }
-
-                              late Widget valueChild;
-
-                              if (data.node.type == NodeType.boolean) {
-                                valueChild = DropdownButton<bool>(isDense: true, style: TextStyle(fontSize: fontSize), value: data.node.input as bool, items: [
-                                  DropdownMenuItem(child: Text("True"), value: true),
-                                  DropdownMenuItem(child: Text("False"), value: false),
-                                ], onChanged: (value) {
-                                  if (value == null) return;
-
-                                  Change<bool> change = Change<bool>(
-                                    data.node.input == true,
-                                    () {
-                                      data.node.input = value;
-                                      setState(() {});
-                                    },
-                                    (old) {
-                                      data.node.input = old;
-                                      setState(() {});
-                                    },
-                                  );
-
-                                  changes.add(change);
-                                  setState(() {});
-                                });
-                              } else if (data.node.isParentType > 0) {
-                                valueChild = SelectableText("${data.node.children.length} ${Word.fromCount(data.node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}", style: TextStyle(fontSize: fontSize));
-                              } else if (data.node.type == NodeType.empty) {
-                                valueChild = Text("Null", style: TextStyle(fontSize: fontSize));
-                              } else {
-                                valueChild = Form(
-                                  key: formControllers[data.id]!.key,
-                                  child: TextFormField(
-                                    controller: formControllers[data.id]!.controller,
-                                    style: TextStyle(fontSize: fontSize),
-                                    decoration: InputDecoration(
-                                      isDense: true,
-                                      border: InputBorder.none,
-                                      errorStyle: TextStyle(fontSize: fontSize - 3),
-                                    ),
-                                    onChanged: (source) {
-                                      Logger.print("Editing complete");
-                                      (formControllers[data.id]!.key.currentState as FormState).save();
-                                    },
-                                    onSaved: (source) {
-                                      if (source == null) return;
-                                      bool result = (formControllers[data.id]!.key.currentState as FormState).validate();
-                                      if (result == false) return;
-
-                                      var value = get(source);
+                                  if (data.node.type == NodeType.boolean) {
+                                    valueChild = DropdownButton<bool>(isDense: true, style: TextStyle(fontSize: fontSize), value: data.node.input as bool, items: [
+                                      DropdownMenuItem(child: Text("True"), value: true),
+                                      DropdownMenuItem(child: Text("False"), value: false),
+                                    ], onChanged: (value) {
                                       if (value == null) return;
-                                      Logger.print("Found value of type ${value.runtimeType}...");
 
-                                      var change = Change<Object?>(
-                                        copy(data.node.input),
+                                      Change<bool> change = Change<bool>(
+                                        data.node.input == true,
                                         () {
-                                          Logger.print("Setting value... (text: $source) (value: ${value.runtimeType} ${value.hashCode})");
-                                          data.node.input = get(source);
-                                          refresh();
-                                        },
-                                        (value) {
-                                          Logger.print("Setting value... (value: ${value.runtimeType} ${value.hashCode})");
                                           data.node.input = value;
-                                          formControllers[data.id]?.controller.text = data.node.valueToString();
-                                          refresh();
+                                          setState(() {});
+                                        },
+                                        (old) {
+                                          data.node.input = old;
+                                          setState(() {});
                                         },
                                       );
 
                                       changes.add(change);
-                                      refresh();
-                                    },
-                                    validator: (value) {
-                                      if (value == null) return "Value cannot be empty.";
-                                      if (get(value) == null) return "Value is invalid.";
-                                      return null;
-                                    },
-                                  ),
-                                );
-                              }
+                                      setState(() {});
+                                    });
+                                  } else if (data.node.isParentType > 0) {
+                                    valueChild = SelectableText("${data.node.children.length} ${Word.fromCount(data.node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}", style: TextStyle(fontSize: fontSize));
+                                  } else if (data.node.type == NodeType.empty) {
+                                    valueChild = Text("Null", style: TextStyle(fontSize: fontSize));
+                                  } else {
+                                    valueChild = Form(
+                                      key: formControllers[data.id]!.key,
+                                      child: TextFormField(
+                                        controller: formControllers[data.id]!.controller,
+                                        style: TextStyle(fontSize: fontSize),
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          border: InputBorder.none,
+                                          errorStyle: TextStyle(fontSize: fontSize - 3),
+                                        ),
+                                        onChanged: (source) {
+                                          Logger.print("Editing complete");
+                                          (formControllers[data.id]!.key.currentState as FormState).save();
+                                        },
+                                        onSaved: (source) {
+                                          if (source == null) return;
+                                          bool result = (formControllers[data.id]!.key.currentState as FormState).validate();
+                                          if (result == false) return;
 
-                              List<cm.ContextMenuEntry> contextMenuEntries = [
-                                if (data.node.type == NodeType.array || data.node.type == NodeType.map)
-                                cm.MenuItem(label: "New Child", icon: Icons.add, onSelected: () {
-                                  Node newNode = Node(input: "New String");
-                                  NodeData newData = data.node.type == NodeType.map ? NodeKeyValuePair(key: "New String", value: newNode) : newNode;
+                                          var value = get(source);
+                                          if (value == null) return;
+                                          Logger.print("Found value of type ${value.runtimeType}...");
 
-                                  var change = Change<String>(
-                                    newData.id,
-                                    () {
-                                      data.children.add(newData);
-                                      Logger.print("Added child ${newData.runtimeType} (currently ${entry.node.children.length} children)");
-                                      refresh(rebuild: true);
-                                    },
-                                    (id) {
-                                      data.children.removeWhere((x) => x.id == id);
-                                      Logger.print("Removed child $id (currently ${entry.node.children.length} children)");
-                                      refresh(rebuild: true);
-                                    }
-                                  );
-
-                                  changes.add(change);
-                                  refresh(rebuild: true);
-                                }),
-                                cm.MenuItem(label: "Delete", icon: Icons.delete, onSelected: () {
-                                  AllNodeData? parent = data.parent;
-                                  Logger.print("Found parent of type ${parent.runtimeType} from ID ${data.parent}");
-                                  if (parent == null) return;
-
-                                  int getIndex(List<NodeData> children) {
-                                    return children.indexWhere((x) => x.id == data.id);
-                                  }
-
-                                  int index = getIndex(() {
-                                    if (parent is NodeData) {
-                                      return parent.children;
-                                    } else if (parent is RootNode) {
-                                      return parent.children;
-                                    } else {
-                                      throw UnimplementedError();
-                                    }
-                                  }());
-
-                                  var change = Change<({AllNodeData parent, NodeData node, int index})>(
-                                    (parent: parent, node: data, index: index),
-                                    () {
-                                      if (parent is NodeData) {
-                                        parent.children.removeAt(index);
-                                      } else if (parent is RootNode) {
-                                        parent.children.removeAt(index);
-                                      } else {
-                                        return;
-                                      }
-
-                                      Logger.print("Removed child of ID ${data.id}");
-                                    },
-                                    (r) {
-                                      if (parent is NodeData) {
-                                        parent.children.insert(r.index, r.node);
-                                      } else if (parent is RootNode) {
-                                        parent.children.insert(r.index, r.node);
-                                      } else {
-                                        return;
-                                      }
-
-                                      Logger.print("Added child of ID ${r.node.id} at index ${r.index}");
-                                    }
-                                  );
-
-                                  changes.add(change);
-                                  refresh(rebuild: true);
-                                })
-                              ];
-
-                              var contextMenu = cm.ContextMenu(entries: contextMenuEntries);
-
-                              return TreeRowContainer(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    SizedBox(
-                                      width: width1,
-                                      child: keyWidget ?? SelectableText(title, textAlign: TextAlign.left),
-                                    ),
-                                    SizedBox(
-                                      width: width3,
-                                      child: Padding(
-                                        padding: EdgeInsets.symmetric(horizontal: 8),
-                                        child: valueChild,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: width2,
-                                      child: DropdownButton<NodeType>(isDense: true, items: NodeType.values.map((type) {
-                                        return DropdownMenuItem<NodeType>(
-                                          alignment: AlignmentGeometry.center,
-                                          value: type,
-                                          child: Text(nodeTypeToString(type), textAlign: TextAlign.center),
-                                        );
-                                      }).toList(), onChanged: (type) {
-                                        if (type == null) return;
-                                        if (type == data.node.type) return;
-
-                                        late void Function() change;
-                                        late void Function(({Object? input, int parentType, Iterable<NodeData> children}) r) undo;
-
-                                        var old = (
-                                          input: copy(data.node.input),
-                                          parentType: data.node.isParentType,
-                                          children: List<NodeData>.from(data.children),
-                                        );
-
-                                        if (type == NodeType.map) {
-                                          change = () {
-                                            data.node.input = null;
-                                            data.node.isParentType = 2;
-                                            List<NodeKeyValuePair> children = [];
-
-                                            for (NodeData child in data.node.children) {
-                                              if (child is Node) {
-                                                children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
-                                              } else if (child is NodeKeyValuePair) {
-                                                children.add(child);
-                                              }
-                                            }
-
-                                            data.node.children.clear();
-                                            for (var child in children) data.node.children.add(child);
-                                            refresh(rebuild: true);
-                                          };
-                                        } else if (type == NodeType.array) {
-                                          change = () {
-                                            data.node.input = null;
-                                            data.node.isParentType = 1;
-                                            List<Node> children = [];
-
-                                            for (NodeData child in data.node.children) {
-                                              if (child is Node) {
-                                                children.add(child);
-                                              } else if (child is NodeKeyValuePair) {
-                                                children.add(Node(input: child.node.input));
-                                              }
-                                            }
-
-                                            data.node.children.clear();
-                                            for (var child in children) data.node.children.add(child);
-                                            refresh(rebuild: true);
-                                          };
-                                        } else {
-                                          change = () {
-                                            data.node.isParentType = 0;
-                                            data.node.children.clear();
-                                            data.node.input = getDefaultValue(type);
-                                            refresh(rebuild: true);
-                                          };
-                                        }
-
-                                        undo = (r) {
-                                          Logger.print("Restoring data: $r");
-                                          data.node.isParentType = r.parentType;
-                                          data.node.input = r.input;
-                                          data.node.children.clear();
-
-                                          for (var child in r.children) {
-                                            data.node.children.add(child);
-                                          }
-
-                                          Logger.print("Now type ${data.node.type}:${data.node.isParentType} with ${data.node.children.length} children");
-                                          refresh(rebuild: true);
-                                        };
-
-                                        var changeData = Change<({Object? input, int parentType, Iterable<NodeData> children})>(
-                                          old,
-                                          change,
-                                          undo,
-                                        );
-
-                                        changes.add(changeData);
-                                        Logger.print("Changing node to $type... (value of ${data.node.input}) (${[data.node.input.runtimeType, data.node.type, data.node.identify(debug: true), data.children.isEmpty].join(" - ")}) (${data.children.length} children)");
-                                        refresh();
-                                      }, value: data.node.type),
-                                    ),
-                                    Builder(
-                                      builder: (context) {
-                                        return IconButton(onPressed: () async {
-                                          var box = context.findRenderObject() as RenderBox;
-                                          var pos = box.localToGlobal(Offset.zero);
-                                          var previous = contextMenu.position == null ? null : Offset(contextMenu.position!.dx, contextMenu.position!.dy);
-                                          contextMenu.position = pos;
-                                          await contextMenu.show(context);
-                                          contextMenu.position = previous;
-                                        }, icon: Icon(Icons.more_vert), padding: EdgeInsets.zero);
-                                      }
-                                    ),
-                                    Builder(
-                                      builder: (context) {
-                                        var parent = data.parent;
-                                        late List<NodeData> children;
-                                        int index = 0;
-
-                                        if (parent is NodeData) {
-                                          children = parent.children;
-                                        } else if (parent is RootNode) {
-                                          children = parent.children;
-                                        } else {
-                                          throw UnimplementedError();
-                                        }
-
-                                        for (var child in children) {
-                                          if (child.id == data.id) break;
-                                          index++;
-                                        }
-
-                                        void move(int factor) {
-                                          var change = Change<(int index, int factor, NodeData data)>(
-                                            (index, factor, data),
+                                          var change = Change<Object?>(
+                                            copy(data.node.input),
                                             () {
-                                              children.removeAt(index);
-                                              children.insert(index - factor, data);
+                                              Logger.print("Setting value... (text: $source) (value: ${value.runtimeType} ${value.hashCode})");
+                                              data.node.input = get(source);
+                                              refresh();
                                             },
-                                            (data) {
-                                              children.removeAt(data.$1 - data.$2);
-                                              children.insert(data.$1, data.$3);
-                                            }
+                                            (value) {
+                                              Logger.print("Setting value... (value: ${value.runtimeType} ${value.hashCode})");
+                                              data.node.input = value;
+                                              formControllers[data.id]?.controller.text = data.node.valueToString();
+                                              refresh();
+                                            },
                                           );
 
                                           changes.add(change);
+                                          refresh();
+                                        },
+                                        validator: (value) {
+                                          if (value == null) return "Value cannot be empty.";
+                                          if (get(value) == null) return "Value is invalid.";
+                                          return null;
+                                        },
+                                      ),
+                                    );
+                                  }
+
+                                  List<cm.ContextMenuEntry> contextMenuEntries = [
+                                    if (data.node.type == NodeType.array || data.node.type == NodeType.map)
+                                    cm.MenuItem(label: "New Child", icon: Icons.add, onSelected: () {
+                                      Node newNode = Node(input: "New String");
+                                      NodeData newData = data.node.type == NodeType.map ? NodeKeyValuePair(key: "New String", value: newNode) : newNode;
+
+                                      var change = Change<String>(
+                                        newData.id,
+                                        () {
+                                          data.children.add(newData);
+                                          Logger.print("Added child ${newData.runtimeType} (currently ${entry.node.children.length} children)");
+                                          refresh(rebuild: true);
+                                        },
+                                        (id) {
+                                          data.children.removeWhere((x) => x.id == id);
+                                          Logger.print("Removed child $id (currently ${entry.node.children.length} children)");
                                           refresh(rebuild: true);
                                         }
+                                      );
 
-                                        return MoveUpDownWidget(onMoveUp: index == 0 ? null : (context) => move(1), onMoveDown: index == children.length - 1 ? null : (context) => move(-1));
-                                      },
+                                      changes.add(change);
+                                      refresh(rebuild: true);
+                                    }),
+                                    cm.MenuItem(label: "Delete", icon: Icons.delete, onSelected: () {
+                                      AllNodeData? parent = data.parent;
+                                      Logger.print("Found parent of type ${parent.runtimeType} from ID ${data.parent}");
+                                      if (parent == null) return;
+
+                                      int getIndex(List<NodeData> children) {
+                                        return children.indexWhere((x) => x.id == data.id);
+                                      }
+
+                                      int index = getIndex(() {
+                                        if (parent is NodeData) {
+                                          return parent.children;
+                                        } else if (parent is RootNode) {
+                                          return parent.children;
+                                        } else {
+                                          throw UnimplementedError();
+                                        }
+                                      }());
+
+                                      var change = Change<({AllNodeData parent, NodeData node, int index})>(
+                                        (parent: parent, node: data, index: index),
+                                        () {
+                                          if (parent is NodeData) {
+                                            parent.children.removeAt(index);
+                                          } else if (parent is RootNode) {
+                                            parent.children.removeAt(index);
+                                          } else {
+                                            return;
+                                          }
+
+                                          Logger.print("Removed child of ID ${data.id}");
+                                        },
+                                        (r) {
+                                          if (parent is NodeData) {
+                                            parent.children.insert(r.index, r.node);
+                                          } else if (parent is RootNode) {
+                                            parent.children.insert(r.index, r.node);
+                                          } else {
+                                            return;
+                                          }
+
+                                          Logger.print("Added child of ID ${r.node.id} at index ${r.index}");
+                                        }
+                                      );
+
+                                      changes.add(change);
+                                      refresh(rebuild: true);
+                                    })
+                                  ];
+
+                                  var contextMenu = cm.ContextMenu(entries: contextMenuEntries);
+
+                                  return TreeRowContainer(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        SizedBox(
+                                          width: width1,
+                                          child: keyWidget ?? SelectableText(title, textAlign: TextAlign.left),
+                                        ),
+                                        SizedBox(
+                                          width: width3,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8),
+                                            child: valueChild,
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: width2,
+                                          child: DropdownButton<NodeType>(isDense: true, items: NodeType.values.map((type) {
+                                            return DropdownMenuItem<NodeType>(
+                                              alignment: AlignmentGeometry.center,
+                                              value: type,
+                                              child: Text(nodeTypeToString(type), textAlign: TextAlign.center),
+                                            );
+                                          }).toList(), onChanged: (type) {
+                                            if (type == null) return;
+                                            if (type == data.node.type) return;
+
+                                            late void Function() change;
+                                            late void Function(({Object? input, int parentType, Iterable<NodeData> children}) r) undo;
+
+                                            var old = (
+                                              input: copy(data.node.input),
+                                              parentType: data.node.isParentType,
+                                              children: List<NodeData>.from(data.children),
+                                            );
+
+                                            if (type == NodeType.map) {
+                                              change = () {
+                                                data.node.input = null;
+                                                data.node.isParentType = 2;
+                                                List<NodeKeyValuePair> children = [];
+
+                                                for (NodeData child in data.node.children) {
+                                                  if (child is Node) {
+                                                    children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
+                                                  } else if (child is NodeKeyValuePair) {
+                                                    children.add(child);
+                                                  }
+                                                }
+
+                                                data.node.children.clear();
+                                                for (var child in children) data.node.children.add(child);
+                                                refresh(rebuild: true);
+                                              };
+                                            } else if (type == NodeType.array) {
+                                              change = () {
+                                                data.node.input = null;
+                                                data.node.isParentType = 1;
+                                                List<Node> children = [];
+
+                                                for (NodeData child in data.node.children) {
+                                                  if (child is Node) {
+                                                    children.add(child);
+                                                  } else if (child is NodeKeyValuePair) {
+                                                    children.add(Node(input: child.node.input));
+                                                  }
+                                                }
+
+                                                data.node.children.clear();
+                                                for (var child in children) data.node.children.add(child);
+                                                refresh(rebuild: true);
+                                              };
+                                            } else {
+                                              change = () {
+                                                data.node.isParentType = 0;
+                                                data.node.children.clear();
+                                                data.node.input = getDefaultValue(type);
+                                                refresh(rebuild: true);
+                                              };
+                                            }
+
+                                            undo = (r) {
+                                              Logger.print("Restoring data: $r");
+                                              data.node.isParentType = r.parentType;
+                                              data.node.input = r.input;
+                                              data.node.children.clear();
+
+                                              for (var child in r.children) {
+                                                data.node.children.add(child);
+                                              }
+
+                                              Logger.print("Now type ${data.node.type}:${data.node.isParentType} with ${data.node.children.length} children");
+                                              refresh(rebuild: true);
+                                            };
+
+                                            var changeData = Change<({Object? input, int parentType, Iterable<NodeData> children})>(
+                                              old,
+                                              change,
+                                              undo,
+                                            );
+
+                                            changes.add(changeData);
+                                            Logger.print("Changing node to $type... (value of ${data.node.input}) (${[data.node.input.runtimeType, data.node.type, data.node.identify(debug: true), data.children.isEmpty].join(" - ")}) (${data.children.length} children)");
+                                            refresh();
+                                          }, value: data.node.type),
+                                        ),
+                                        Builder(
+                                          builder: (context) {
+                                            return IconButton(onPressed: () async {
+                                              var box = context.findRenderObject() as RenderBox;
+                                              var pos = box.localToGlobal(Offset.zero);
+                                              var previous = contextMenu.position == null ? null : Offset(contextMenu.position!.dx, contextMenu.position!.dy);
+                                              contextMenu.position = pos;
+                                              await contextMenu.show(context);
+                                              contextMenu.position = previous;
+                                            }, icon: Icon(Icons.more_vert), padding: EdgeInsets.zero);
+                                          }
+                                        ),
+                                        Builder(
+                                          builder: (context) {
+                                            var parent = data.parent;
+                                            late List<NodeData> children;
+                                            int index = 0;
+
+                                            if (parent is NodeData) {
+                                              children = parent.children;
+                                            } else if (parent is RootNode) {
+                                              children = parent.children;
+                                            } else {
+                                              throw UnimplementedError();
+                                            }
+
+                                            for (var child in children) {
+                                              if (child.id == data.id) break;
+                                              index++;
+                                            }
+
+                                            void move(int factor) {
+                                              var change = Change<(int index, int factor, NodeData data)>(
+                                                (index, factor, data),
+                                                () {
+                                                  children.removeAt(index);
+                                                  children.insert(index - factor, data);
+                                                },
+                                                (data) {
+                                                  children.removeAt(data.$1 - data.$2);
+                                                  children.insert(data.$1, data.$3);
+                                                }
+                                              );
+
+                                              changes.add(change);
+                                              refresh(rebuild: true);
+                                            }
+
+                                            return MoveUpDownWidget(onMoveUp: index == 0 ? null : (context) => move(1), onMoveDown: index == children.length - 1 ? null : (context) => move(-1));
+                                          },
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              );
-                            }
-                          ),
+                                  );
+                                }
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                        guide: IndentGuide.connectingLines(
+                          indent: 24,
+                          thickness: 1,
+                          color: Colors.grey,
+                        ),
+                        entry: entry,
+                      ),
                     ),
-                    guide: IndentGuide.connectingLines(
-                      indent: 24,
-                      thickness: 1,
-                      color: Colors.grey,
-                    ),
-                    entry: entry,
-                  ),
-                ),
-              );
-            }
-          ),
-        );
-      }),
+                  );
+                }
+              ),
+            );
+          }),
+        ),
+      ),
     );
   }
 }
@@ -1071,4 +1094,28 @@ class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
       ),
     );
   }
+}
+
+class EditorIntent extends Intent {
+  final String id;
+  final List<LogicalKeyboardKey>? keys;
+  final Object? Function() onActivate;
+
+  const EditorIntent(this.id, this.keys, this.onActivate);
+
+  Map<LogicalKeySet, EditorIntent>? toShortcut() {
+    if (keys == null) return null;
+    var keyset = LogicalKeySet(keys!.first, keys!.elementAtOrNull(1), keys!.elementAtOrNull(2), keys!.elementAtOrNull(3));
+    return {keyset: this};
+  }
+
+  static List<EditorIntent> generateAll(BuildContext context, ObjectEditorDesktop widget) {
+    return [];
+  }
+}
+
+class EditorIntentMenuBarReference extends MenuButton {
+  EditorIntentMenuBarReference(List<EditorIntent> intents, String id, Widget text) : super(text: text, onTap: () {
+    return intents.firstWhere((x) => x.id == id).onActivate().toVoid();
+  });
 }
