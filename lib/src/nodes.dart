@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:bson/bson.dart';
 import 'package:dictionaries/main.dart';
 import 'package:dictionaries/src/editor.dart';
+import 'package:dictionaries/src/main.dart';
 import 'package:dictionaries/src/nodeenums.dart';
 import 'package:intl/intl.dart';
 import 'package:json2yaml/json2yaml.dart';
@@ -13,6 +14,7 @@ import 'package:styled_logger/styled_logger.dart';
 import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
 import 'package:yaml/yaml.dart';
+import 'package:yaml_edit/yaml_edit.dart';
 
 int parentCount = 0;
 
@@ -238,16 +240,20 @@ class RootNode extends AllNodeData {
   List<NodeData> children;
   RootNodeType type;
   Map<String, AllNodeData> _lookup = {};
+  Map<DataType, Object> _rawData = {};
 
-  RootNode({required this.children, required this.type}) {
+  RootNode({required this.children, required this.type, Map<DataType, String>? rawData}) {
+    if (rawData != null) _rawData = rawData;
     rebuild();
   }
 
-  RootNode.clean({required this.type}) : children = const [] {
+  RootNode.clean({required this.type, Map<DataType, String>? rawData}) : children = const [] {
+    if (rawData != null) _rawData = rawData;
     rebuild();
   }
 
   static const bool allowLookup = false;
+  static const int tryYamlEditLimit = 1000;
   static const String fileMagic = "C-DICT";
   static late RootNode instance;
   static int nodes = 0;
@@ -283,6 +289,21 @@ class RootNode extends AllNodeData {
     Logger.print("Assigned $parentCount parents to RootNode!");
   }
 
+  List<NodeData> get allChildren {
+    List<NodeData> process(List<NodeData> children) {
+      List<NodeData> results = [];
+
+      for (var child in children) {
+        results.add(child);
+        results.addAll(process(child.children));
+      }
+
+      return results;
+    }
+
+    return process(children);
+  }
+
   AllNodeData? lookup(String? key) {
     return _lookup.containsKey(key) ? _lookup[key] : null;
   }
@@ -291,6 +312,12 @@ class RootNode extends AllNodeData {
     var result = lookup(key);
     if (result is NodeData) return result;
     return null;
+  }
+
+  T? getRawData<T>(DataType key) {
+    if (!_rawData.containsKey(key)) return null;
+    if (_rawData[key] is! T) return null;
+    return _rawData[key] as T;
   }
 
   Object? _toJson(NodeConversionMode mode) => _toSpecified(rootNodeTypeToNodeType(type), children, (x) => Node.toJson(x, mode));
@@ -302,8 +329,82 @@ class RootNode extends AllNodeData {
     return encoder.convert(toJson());
   }
 
+  String? tryYamlEdit() {
+    if (allChildren.length > tryYamlEditLimit) return null;
+    Logger.print("tryYamlEdit started with data ${_rawData.runtimeType} (${_rawData.keys.join(", ")})");
+    String? raw = getRawData(DataType.yaml);
+    if (raw == null) return null;
+
+    YamlEditor editor = YamlEditor(raw);
+    Stopwatch stopwatch = Stopwatch()..start();
+    List<(List<Object> keys, Object? input)> updates = [];
+    Object? current = toJson();
+
+    bool currentIsDifferent(List<Object> keys, Node node) {
+      Object? value;
+
+      if (current is Map) {
+        value = Map.from(current);
+      } else if (current is List) {
+        value = List.from(current);
+      }
+
+      for (Object key in keys) {
+        if (value == null) return true;
+
+        if (value is List) {
+          if (key is int) {
+            if (key >= 0 && key <= value.length - 1) {
+              value = value[key];
+            } else {
+              return true;
+            }
+          } else {
+            return true;
+          }
+        } else if (value is Map) {
+          if (value.containsKey(key)) {
+            value = value[key];
+          } else {
+            return true;
+          }
+        } else {
+          return true;
+        }
+      }
+
+      return node.input != value;
+    }
+
+    void process(List<Object> keys, AllNodeData node, bool insideNkvp) {
+      if (node is NodeKeyValuePair) {
+        return process([...keys, node.key], node.value, true);
+      } else if (node is Node) {
+        if (currentIsDifferent(keys, node) && node.isParentType == 0) updates.add(([...keys, if (!insideNkvp) node.index], node.input));
+        for (var child in node.children) process([...keys, if (!insideNkvp) node.index], child, false);
+      } else if (node is RootNode) {
+        for (var child in children) {
+          process([...keys, if (node.type == RootNodeType.array) child.index], child, false);
+        }
+      }
+    }
+
+    Logger.print("tryYamlEdit setup after ${stopwatch.elapsedMilliseconds}ms");
+    process([], this, false);
+    Logger.print("tryYamlEdit processed after ${stopwatch.elapsedMilliseconds}ms: ${updates.length} updates");
+
+    for (var entry in updates) {
+      var path = entry.$1;
+      var value = entry.$2;
+      editor.update(path, value);
+    }
+
+    Logger.print("tryYamlEdit finished after ${(stopwatch..stop()).elapsedMilliseconds}ms");
+    return editor.toString();
+  }
+
   String toYamlString() {
-    return json2yaml(toJson() as Map<String, dynamic>);
+    return tryYamlEdit() ?? json2yaml(toJson() as Map<String, dynamic>);
   }
 
   String toPlistString({bool showNull = false, bool pretty = true, String indent = '  '}) {
@@ -407,7 +508,9 @@ class RootNode extends AllNodeData {
     return document;
   }
 
-  static RootNode fromObject(Object? input) {
+  static RootNode fromObject(Object? input, Map<DataType, String>? rawData) {
+    Logger.print("Constructing from object with rawData of type ${rawData.runtimeType}...");
+
     Node process(Object? input, [int index = -1]) {
       if (input is List && input is! Uint8List) {
         return Node(isParentType: 1, input: null, children: input.map((value) {
@@ -433,7 +536,7 @@ class RootNode extends AllNodeData {
         return NodeKeyValuePair(key: entry.key.toString(), value: process(entry.value, index));
       });
 
-      return RootNode(children: objects.toList(), type: RootNodeType.map);
+      return RootNode(children: objects.toList(), type: RootNodeType.map, rawData: rawData);
     } else if (input is List) {
       int index = -1;
 
@@ -442,26 +545,26 @@ class RootNode extends AllNodeData {
         return process(value, index);
       });
 
-      return RootNode(children: objects.toList(), type: RootNodeType.array);
+      return RootNode(children: objects.toList(), type: RootNodeType.array, rawData: rawData);
     } else {
       throw UnimplementedError();
     }
   }
 
   static RootNode fromJson(String raw) {
-    return fromObject(jsonDecode(raw));
+    return fromObject(jsonDecode(raw), null);
   }
 
   static RootNode fromPlist(String input) {
-    return fromObject(PlistParser().parse(input));
+    return fromObject(PlistParser().parse(input), null);
   }
 
   static RootNode fromBplist(Uint8List input) {
-    return fromObject(PlistParser().parseBinaryBytes(input));
+    return fromObject(PlistParser().parseBinaryBytes(input), null);
   }
 
   static RootNode fromYaml(String input) {
-    return fromObject(loadYaml(input));
+    return fromObject(loadYaml(input), {DataType.yaml: input});
   }
 
   static RootNode? tryParse(Uint8List raw) {
@@ -473,7 +576,7 @@ class RootNode extends AllNodeData {
       (raw) => RootNode.fromJson(utf8.decode(raw)),
       (raw) => RootNode.fromYaml(utf8.decode(raw)),
       (raw) => RootNode.fromPlist(utf8.decode(raw)),
-      (raw) => RootNode.fromObject(BsonCodec.deserialize(BsonBinary.from(raw))),
+      (raw) => RootNode.fromObject(BsonCodec.deserialize(BsonBinary.from(raw)), null),
     ];
 
     for (var function in functions) {
