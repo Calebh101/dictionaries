@@ -26,15 +26,15 @@ enum EditorSource {
 }
 
 class ObjectEditorDesktop extends StatefulWidget {
-  late _ObjectEditorState state;
+  late ObjectEditorState state;
   final EditorSource source;
   ObjectEditorDesktop({super.key, required this.source});
 
   @override
-  State<ObjectEditorDesktop> createState() => state = _ObjectEditorState();
+  State<ObjectEditorDesktop> createState() => state = ObjectEditorState();
 }
 
-class _ObjectEditorState extends State<ObjectEditorDesktop> {
+class ObjectEditorState extends State<ObjectEditorDesktop> {
   final ChangeStack changes = ChangeStack(limit: 200);
   late final TreeController<NodeData> controller;
 
