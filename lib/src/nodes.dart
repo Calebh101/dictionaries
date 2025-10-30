@@ -383,9 +383,7 @@ class RootNode extends AllNodeData {
         if (currentIsDifferent(keys, node) && node.isParentType == 0) updates.add(([...keys, if (!insideNkvp) node.index], node.input));
         for (var child in node.children) process([...keys, if (!insideNkvp) node.index], child, false);
       } else if (node is RootNode) {
-        for (var child in children) {
-          process([...keys, if (node.type == RootNodeType.array) child.index], child, false);
-        }
+        for (var child in node.children) process([...keys, if (node.type == RootNodeType.array) child.index], child, false);
       }
     }
 
@@ -399,8 +397,9 @@ class RootNode extends AllNodeData {
       editor.update(path, value);
     }
 
-    Logger.print("tryYamlEdit finished after ${(stopwatch..stop()).elapsedMilliseconds}ms");
-    return editor.toString();
+    String output = editor.toString();
+    Logger.print("tryYamlEdit finished after ${(stopwatch..stop()).elapsedMilliseconds}ms: ${raw.hashCode} vs ${output.hashCode}");
+    return output;
   }
 
   String toYamlString() {

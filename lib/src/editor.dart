@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:any_date/any_date.dart';
+import 'package:collection/collection.dart';
 import 'package:dictionaries/files/files.dart';
 import 'package:dictionaries/main.dart';
 import 'package:dictionaries/src/nodeenums.dart';
@@ -18,6 +21,7 @@ String? currentFileName;
 List<NodeData> currentExpanded = [];
 bool isCurrentlyShowingMoveUpDownOverlay = false;
 List<MoveUpDownWidget> moveUpDownWidgets = [];
+StreamController<void> moveUpDownWidgetsChanged = StreamController.broadcast();
 
 enum EditorSource {
   local,
@@ -714,6 +718,7 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
                               var contextMenu = cm.ContextMenu(entries: contextMenuEntries);
 
                               return TreeRowContainer(
+                                id: data.id,
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
@@ -867,7 +872,7 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
                                           refresh(rebuild: true);
                                         }
 
-                                        return MoveUpDownWidget(onMoveUp: index == 0 ? null : (context) => move(1), onMoveDown: index == children.length - 1 ? null : (context) => move(-1));
+                                        return MoveUpDownWidget(onMoveUp: index == 0 ? null : (context) => move(1), onMoveDown: index == children.length - 1 ? null : (context) => move(-1), id: data.id);
                                       },
                                     ),
                                   ],
@@ -905,7 +910,8 @@ class EditorNodeWidgetData {
 
 class TreeRowContainer extends StatefulWidget {
   final Widget child;
-  const TreeRowContainer({super.key, required this.child});
+  final String id;
+  const TreeRowContainer({super.key, required this.child, required this.id});
 
   @override
   State<TreeRowContainer> createState() => _TreeRowContainerState();
@@ -913,6 +919,7 @@ class TreeRowContainer extends StatefulWidget {
 
 class _TreeRowContainerState extends State<TreeRowContainer> {
   bool hover = false;
+  StreamSubscription? subscription;
 
   void set(bool status) {
     hover = status;
@@ -920,12 +927,35 @@ class _TreeRowContainerState extends State<TreeRowContainer> {
   }
 
   @override
+  void initState() {
+    subscription = moveUpDownWidgetsChanged.stream.listen((_) => setState(() {}));
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    Color color = Colors.transparent;
+    bool moveUpDownWidgetIsShown = moveUpDownWidgets.where((x) => x.isShown).any((x) => x.id == widget.id);
+
+    if (moveUpDownWidgetIsShown) {
+      color = Theme.of(context).brightness == Brightness.light ? const Color.fromARGB(255, 202, 202, 202) : const Color.fromARGB(255, 26, 35, 46);
+    }
+
+    if (hover) {
+      color = Theme.of(context).brightness == Brightness.light ? const Color.fromARGB(255, 231, 231, 231) : const Color.fromARGB(255, 43, 57, 75);
+    }
+
     return MouseRegion(
       onEnter: (event) => set(true),
       onExit: (event) => set(false),
       child: Container(
-        color: hover ? (Theme.of(context).brightness == Brightness.light ? const Color.fromARGB(255, 202, 202, 202) : const Color.fromARGB(255, 26, 35, 46)) : Colors.transparent,
+        color: color,
         padding: EdgeInsets.symmetric(vertical: 0),
         child: widget.child,
       ),
@@ -939,12 +969,15 @@ class MoveUpDownWidget extends StatefulWidget {
 
   final bool showOnEnter;
   final bool hideAllOnContact;
+  final String id;
 
   late final _MoveUpDownWidgetState _state;
-  MoveUpDownWidget({super.key, required this.onMoveUp, required this.onMoveDown, this.showOnEnter = true, this.hideAllOnContact = true});
+  MoveUpDownWidget({super.key, required this.id, required this.onMoveUp, required this.onMoveDown, this.showOnEnter = true, this.hideAllOnContact = true});
 
   @override
   State<MoveUpDownWidget> createState() => _state = _MoveUpDownWidgetState();
+
+  bool get isShown => _state.isShown;
 
   void show() {
     _state.show();
@@ -958,6 +991,7 @@ class MoveUpDownWidget extends StatefulWidget {
 class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
   OverlayEntry? entry;
   LayerLink link = LayerLink();
+  bool isShown = false;
 
   @override
   void initState() {
@@ -981,6 +1015,7 @@ class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
     if (entry != null || isCurrentlyShowingMoveUpDownOverlay == true) return;
     isCurrentlyShowingMoveUpDownOverlay = true;
     Logger.verbose("Showing...");
+    isShown = true;
 
     double elements = 0;
     for (var x in [true, widget.onMoveUp != null, widget.onMoveDown != null]) if (x) elements++;
@@ -1033,14 +1068,17 @@ class _MoveUpDownWidgetState extends State<MoveUpDownWidget> {
     );
 
     Overlay.of(context).insert(entry!);
+    moveUpDownWidgetsChanged.sink.add(null);
   }
 
   void hide() {
     if (entry == null) return;
     Logger.verbose("Hiding entry of type ${entry.runtimeType}...");
+    isShown = false;
     entry?.remove();
     entry = null;
     isCurrentlyShowingMoveUpDownOverlay = false;
+    moveUpDownWidgetsChanged.sink.add(null);
   }
 
   @override
