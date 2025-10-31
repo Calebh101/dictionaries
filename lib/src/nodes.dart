@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bson/bson.dart';
@@ -325,8 +324,9 @@ class RootNode extends AllNodeData {
   Object? toJson() => _toJson(NodeConversionMode.json);
   XmlDocument toPlist({bool showNull = false}) => _toPlist(_toJson(NodeConversionMode.plist), showNull);
 
-  String toJsonString() {
-    JsonEncoder encoder = JsonEncoder.withIndent('  ');
+  String toJsonString(bool pretty, int? tabLength) {
+    JsonEncoder encoder = JsonEncoder();
+    if (pretty) encoder = JsonEncoder.withIndent(' ' * (tabLength ?? 2));
     return encoder.convert(toJson());
   }
 
@@ -368,11 +368,11 @@ class RootNode extends AllNodeData {
   }
 
   String toYamlString() {
-    return tryYamlEdit() ?? json2yaml(toJson() as Map<String, dynamic>);
+    return tryYamlEdit() ?? json2yaml(_toJson(NodeConversionMode.yaml) as Map<String, dynamic>);
   }
 
-  String toPlistString({bool showNull = false, bool pretty = true, String indent = '  '}) {
-    return _toPlist(toJson(), showNull).toXmlString(pretty: pretty, indent: indent);
+  String toPlistString({bool showNull = false, bool pretty = true, int indentSpaces = 2}) {
+    return _toPlist(_toJson(NodeConversionMode.plist), showNull).toXmlString(pretty: pretty, indent: ' ' * indentSpaces);
   }
 
   Uint8List toBinary() {

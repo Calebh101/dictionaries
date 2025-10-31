@@ -5,7 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:dictionaries/lib/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_highlight/themes/gruvbox-dark.dart';
-import 'package:localpkg_flutter/localpkg.dart';
+
+class PreviewSettings {
+  final int tabLength;
+  final bool pretty;
+  final bool plistExportNulls;
+
+  const PreviewSettings({this.tabLength = 2, this.pretty = true, this.plistExportNulls = false});
+}
 
 class ObjectEditorPreview extends StatefulWidget {
   final DataType type;
@@ -17,58 +24,67 @@ class ObjectEditorPreview extends StatefulWidget {
 }
 
 class _ObjectEditorPreviewState extends State<ObjectEditorPreview> {
-  ScrollController scrollController = ScrollController();
+  ScrollController verticalScrollController = ScrollController();
   ScrollController horizontalScrollController = ScrollController();
+  String? text;
+  PreviewSettings settings = PreviewSettings();
+
+  @override
+  void initState() {
+    compile();
+    super.initState();
+  }
+
+  void compile() {
+    text = compileByType(widget.type, widget.root, settings);
+  }
 
   @override
   Widget build(BuildContext context) {
     Size screen = MediaQuery.of(context).size;
-    String? text = compileByType(widget.type, widget.root);
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+    bool isLight = !isDark;
 
-    return SizedBox(
-      width: screen.width,
-      height: screen.height,
-      child: Scrollbar(
-        thumbVisibility: true,
-        trackVisibility: true,
-        controller: scrollController,
-        notificationPredicate: (notif) => notif.metrics.axis == Axis.vertical,
-        child: Scrollbar(
-          thumbVisibility: true,
-          trackVisibility: true,
+    if (text == null) {
+      return Center(
+        child: Text("No preview available."),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(dataTypeToPrettyString(widget.type)),
+        centerTitle: true,
+        actions: [
+          IconButton(onPressed: () {
+            Clipboard.setData(ClipboardData(text: text!));
+          }, icon: Icon(Icons.copy)),
+          IconButton(onPressed: () {
+            compile();
+            setState(() {});
+          }, icon: Icon(Icons.refresh)),
+        ],
+      ),
+      body: Scrollbar(
+        controller: horizontalScrollController,
+        notificationPredicate: (notif) => notif.metrics.axis == Axis.horizontal,
+        child: SingleChildScrollView(
           controller: horizontalScrollController,
-          notificationPredicate: (notif) => notif.metrics.axis == Axis.horizontal,
-          child: Stack(
-            children: [
-              Positioned(
-                top: 0,
-                right: 16,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(onPressed: () {
-                      if (text == null) return;
-                      Clipboard.setData(ClipboardData(text: text));
-                      SnackBarManager.show(context, "Copied ${text.split("\n").length} lines!");
-                    }, icon: Icon(Icons.copy))
-                  ],
-                ),
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: MediaQuery.of(context).size.width - 4,
+            ),
+            child: HighlightView(
+              text!,
+              language: dataTypeToLanguage(widget.type),
+              theme: isLight ? atomOneLightTheme : gruvboxDarkTheme,
+              padding: EdgeInsets.all(12),
+              textStyle: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 14,
               ),
-              text != null ? SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                controller: scrollController,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  controller: horizontalScrollController,
-                  child: HighlightView(
-                    text,
-                    language: dataTypeToLanguage(widget.type),
-                    theme: Theme.of(context).brightness == Brightness.dark ? gruvboxDarkTheme : atomOneLightTheme,
-                    padding: const EdgeInsets.all(12),
-                  ),
-                ),
-              ) : Text("No preview available."),
-            ],
+            ),
           ),
         ),
       ),

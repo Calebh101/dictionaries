@@ -43,11 +43,11 @@ ObjectEditorTabType dataTypeToObjectEditorTabType(DataType input) {
   }
 }
 
-String? compileByType(DataType type, RootNode root) {
+String? compileByType(DataType type, RootNode root, [PreviewSettings? settings]) {
   switch (type) {
-    case DataType.json: return root.toJsonString();
+    case DataType.json: return root.toJsonString(settings?.pretty ?? true, settings?.tabLength);
     case DataType.yaml: return root.toYamlString();
-    case DataType.plist: return root.toPlistString();
+    case DataType.plist: return root.toPlistString(showNull: settings?.plistExportNulls ?? false, indentSpaces: settings?.tabLength ?? 2, pretty: settings?.pretty ?? true);
   }
 }
 
