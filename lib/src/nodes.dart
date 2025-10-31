@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bson/bson.dart';
@@ -336,51 +337,23 @@ class RootNode extends AllNodeData {
     if (raw == null) return null;
 
     YamlEditor editor = YamlEditor(raw);
+    int updateCount = 0;
     Stopwatch stopwatch = Stopwatch()..start();
-    List<(List<Object> keys, Object? input)> updates = [];
-    Object? current = toJson();
 
-    bool currentIsDifferent(List<Object> keys, Node node) {
-      Object? value;
-
-      if (current is Map) {
-        value = Map.from(current);
-      } else if (current is List) {
-        value = List.from(current);
+    void update(List<Object> keys, Object? input) {
+      try {
+        editor.update(keys, input);
+        updateCount++;
+      } catch (e, t) {
+        Logger.warn("tryYamlEdit.update failed at update $updateCount with exception ${e.runtimeType}:\nSetting keys (${keys.join(", ")}) to value $input\n$e\nStack trace:\n$t");
       }
-
-      for (Object key in keys) {
-        if (value == null) return true;
-
-        if (value is List) {
-          if (key is int) {
-            if (key >= 0 && key <= value.length - 1) {
-              value = value[key];
-            } else {
-              return true;
-            }
-          } else {
-            return true;
-          }
-        } else if (value is Map) {
-          if (value.containsKey(key)) {
-            value = value[key];
-          } else {
-            return true;
-          }
-        } else {
-          return true;
-        }
-      }
-
-      return node.input != value;
     }
 
     void process(List<Object> keys, AllNodeData node, bool insideNkvp) {
       if (node is NodeKeyValuePair) {
         return process([...keys, node.key], node.value, true);
       } else if (node is Node) {
-        if (currentIsDifferent(keys, node) && node.isParentType == 0) updates.add(([...keys, if (!insideNkvp) node.index], node.input));
+        if (node.isParentType == 0) update([...keys, if (!insideNkvp) node.index], node.input);
         for (var child in node.children) process([...keys, if (!insideNkvp) node.index], child, false);
       } else if (node is RootNode) {
         for (var child in node.children) process([...keys, if (node.type == RootNodeType.array) child.index], child, false);
@@ -389,16 +362,8 @@ class RootNode extends AllNodeData {
 
     Logger.print("tryYamlEdit setup after ${stopwatch.elapsedMilliseconds}ms");
     process([], this, false);
-    Logger.print("tryYamlEdit processed after ${stopwatch.elapsedMilliseconds}ms: ${updates.length} updates");
-
-    for (var entry in updates) {
-      var path = entry.$1;
-      var value = entry.$2;
-      editor.update(path, value);
-    }
-
     String output = editor.toString();
-    Logger.print("tryYamlEdit finished after ${(stopwatch..stop()).elapsedMilliseconds}ms: ${raw.hashCode} vs ${output.hashCode}");
+    Logger.print("tryYamlEdit finished $updateCount updates after ${(stopwatch..stop()).elapsedMilliseconds}ms: ${raw.hashCode} vs ${output.hashCode}");
     return output;
   }
 
