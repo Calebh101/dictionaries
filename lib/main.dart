@@ -171,6 +171,7 @@ class _HomeState extends State<Home> {
             Spacer(),
             Text("Welcome to Dictionaries!", style: TextStyle(fontSize: 48)),
             Text("Dictionaries is a tool to view and edit data files like JSON, YAML, and more in a user-friendly and intuitive tree view."),
+            Text("Dictionaries includes lots of user-friendly functions to help with managing these different data types."),
             Spacer(),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
