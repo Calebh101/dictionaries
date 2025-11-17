@@ -1,0 +1,1 @@
+import 'package:dictionaries_parser/dictionaries_parser.dart';
