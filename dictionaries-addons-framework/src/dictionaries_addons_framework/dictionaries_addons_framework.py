@@ -24,10 +24,19 @@ class DictionariesDialogueModuleType(Enum):
     BUTTON = 2
     STRING_INPUT = 3
 
+class Logger:
+    @staticmethod
+    def print(input: object):
+        print(input)
+
+    @staticmethod
+    def verbose(input: object):
+        print("VBS: " + str(input))
+
 def _internalCall(type: str, data: dict):
     print(f"_DICTIONARIES_INTERNAL_API_CALL: {json.dumps({"type": type, "data": data})}")
 
-class DictionariesAddon:
+class DictionariesAddon(ABC):
     """Base class addon authors inherit from."""
 
     def __init__(self, name: str, version: str, author: str | List[str] | None) -> None:
@@ -39,14 +48,27 @@ class DictionariesAddon:
         else:
             self.author = author or []
 
-class DictionariesAddonFunction:
-    """Class for making Python functions that can take inputs and output something."""
+class DictionariesAddonFunction(ABC):
+    """Class for making Python functions that can take inputs and output something.\n\nYour addon needs to register this with `DictionariesApplication.registerFunction`."""
 
     def __init__(self, name: str, description: str, inputs: List[DictionariesAddonFunctionInputType], outputs: List[DictionariesAddonFunctionOutputType]) -> None:
         self.name = name
         self.description = description
         self.inputs = inputs
         self.outputs = outputs
+
+    @abstractmethod
+    def run(self, inputs: List[object]) -> object | None:
+        """Return the object type you inputted when the script is run.\n\nThis function must be overriden."""
+        raise NotImplementedError()
+
+    def toJson(self) -> object:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "inputs": [x.value for x in self.inputs],
+            "outputs": [x.value for x in self.outputs],
+        }
 
 class _DictionariesDialogueModule(ABC):
     def __init__(self, type: DictionariesDialogueModuleType) -> None:
@@ -139,3 +161,7 @@ class DictionariesApplication:
     @staticmethod
     def callDialogue(dialogue: DictionariesDialogue):
         _internalCall("dialogue.new", {"dialogue": dialogue.toJson()})
+
+    @staticmethod
+    def registerFunction(function: DictionariesAddonFunction):
+        _internalCall("function.register", {"function": function.toJson()})

@@ -76,3 +76,7 @@ Dynamic numbers are numbers that use a dynamic amount of bytes. They consist of 
 # Addons
 
 Addons are Python scripts that can provide extra utilities to Dictionaries. You can use them by going to Addons > Manage Addons in the menu bar.
+
+## How do I make addons?
+
+Use the package `dictionaries-addons-framework` (in `/dictionaries-addons-framework`) to make your addons, then add an addon manually in Dictionaries that points to your main addon source file.
