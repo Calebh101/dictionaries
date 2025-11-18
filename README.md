@@ -72,3 +72,7 @@ Run `dart run bin/signatures.dart` to know all the different signatures.
 ## Dynamic Numbers
 
 Dynamic numbers are numbers that use a dynamic amount of bytes. They consist of one byte as a signature for the number, and a dynamic amount of bytes afterwards for the content, based on the signature. See the [`DynamicNumber` Documentation](https://github.com/Calebh101/localpkg-dart#dynamic-numbers) for how to parse them.
+
+# Addons
+
+Addons are Python scripts that can provide extra utilities to Dictionaries. You can use them by going to Addons > Manage Addons in the menu bar.

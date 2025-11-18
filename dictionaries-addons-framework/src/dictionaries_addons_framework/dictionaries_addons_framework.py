@@ -101,10 +101,17 @@ class DictionariesDialogueButtonModule(_DictionariesDialogueModule):
         }
 
 class DictionariesDialogueTextInputModule(_DictionariesDialogueModule):
-    def __init__(self, hint: str):
+    isFileSelect = False
+    isFolderSelect = False
+
+    def __init__(self, hint: str, isFileSelect: bool, isFolderSelect: bool):
         super().__init__(DictionariesDialogueModuleType.STRING_INPUT)
+
         self.hint = hint
         self.text = ""
+
+        self.isFileSelect = isFileSelect
+        self.isFolderSelect = isFolderSelect
 
     def onInput(self, data):
         self.text = data["text"]
@@ -114,7 +121,9 @@ class DictionariesDialogueTextInputModule(_DictionariesDialogueModule):
 
     def toJson(self):
         return {
-            "hint": self.hint
+            "hint": self.hint,
+            "isFileSelect": self.isFileSelect,
+            "isFolderSelect": self.isFolderSelect
         }
 
 class DictionariesDialogue:
