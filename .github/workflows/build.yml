@@ -19,7 +19,6 @@ jobs:
     runs-on: "${{ matrix.os }}"
     strategy:
       matrix:
-        arch: [x64, arm64]
         os:
           - ubuntu-latest
           - windows-latest
@@ -29,7 +28,11 @@ jobs:
           - os: ubuntu-latest
             os-name: linux
             output-name: Dictionaries-Linux-x64
-            build: build/linux/ARCH/release/bundle/dictionaries
+            build: build/linux/x64/release/bundle/dictionaries
+          - os: ubuntu-latest-arm
+            os-name: linux
+            output-name: Dictionaries-Linux-arm64
+            build: build/linux/x64/release/bundle/dictionaries
           - os: windows-latest
             os-name: windows
             output-name: Dictionaries-Windows-x64
@@ -60,14 +63,14 @@ jobs:
         shell: bash
         run: |-
           multiarch=false
-          mkdir -p "build/${{ matrix.os }}/${{ matrix.arch }}"
+          mkdir -p "build/${{ matrix.os }}"
           flutter pub get
           dart run recursive_caster
 
           echo "Building platform ${{ matrix.os }} without multiarch support"
           flutter build ${{ matrix.os-name }} --release
-          cp "${{ matrix.build }}" "build/${{ matrix.os }}/${{ matrix.arch }}/${{ matrix.output-name }}"
+          cp "${{ matrix.build }}" "build/${{ matrix.os }}/${{ matrix.output-name }}"
       - uses: "actions/upload-artifact@v4"
         with:
           name: "executables-${{ github.run_id }}-${{ matrix.os }}"
-          path: "build/${{ matrix.os }}/${{ matrix.arch }}"
+          path: "build/${{ matrix.os }}"
