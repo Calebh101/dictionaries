@@ -64,8 +64,8 @@ jobs:
           dart run recursive_caster
 
           if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            apt-get update -y && apt-get upgrade -y
-            apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev
+            sudo apt-get update -y && sudo apt-get upgrade -y
+            sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev
           fi
 
           echo "Building platform ${{ matrix.os }} without multiarch support"
