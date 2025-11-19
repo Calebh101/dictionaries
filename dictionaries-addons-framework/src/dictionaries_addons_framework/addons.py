@@ -5,7 +5,8 @@ from enum import Enum
 import json
 import random
 import string
-from typing import List
+import sys
+from typing import List, Sequence
 
 class DictionariesAddonFunctionInputType(Enum):
     PLIST_UTF8 = 1
@@ -39,14 +40,21 @@ def _internalCall(type: str, data: dict):
 class DictionariesAddon(ABC):
     """Base class addon authors inherit from."""
 
-    def __init__(self, name: str, version: str, author: str | List[str] | None) -> None:
+    def __init__(self, name: str, description: str, version: str, author: str | List[str] | None = None, website: str | None = None) -> None:
         self.name = name
         self.version = version
+        self.description = description
+        self.website = website
 
         if isinstance(author, str):
             self.author = [author]
         else:
             self.author = author or []
+
+    @abstractmethod
+    def onInitialize(self) -> None:
+        """When Dictionaries is intialized, this function is ran."""
+        pass
 
 class DictionariesAddonFunction(ABC):
     """Class for making Python functions that can take inputs and output something.\n\nYour addon needs to register this with `DictionariesApplication.registerFunction`."""
@@ -103,10 +111,9 @@ class DictionariesDialogueTextModule(_DictionariesDialogueModule):
         }
 
 class DictionariesDialogueButtonModule(_DictionariesDialogueModule):
-    exitOnPressed = True
-
-    def __init__(self, text: str, exitOnPressed: bool):
+    def __init__(self, text: str, exitOnPressed: bool = True):
         super().__init__(DictionariesDialogueModuleType.BUTTON)
+
         self.text = text
         self.pressed = False
         self.exitOnPressed = exitOnPressed
@@ -123,10 +130,7 @@ class DictionariesDialogueButtonModule(_DictionariesDialogueModule):
         }
 
 class DictionariesDialogueTextInputModule(_DictionariesDialogueModule):
-    isFileSelect = False
-    isFolderSelect = False
-
-    def __init__(self, hint: str, isFileSelect: bool, isFolderSelect: bool):
+    def __init__(self, hint: str, isFileSelect: bool = False, isFolderSelect: bool = False):
         super().__init__(DictionariesDialogueModuleType.STRING_INPUT)
 
         self.hint = hint
@@ -149,7 +153,7 @@ class DictionariesDialogueTextInputModule(_DictionariesDialogueModule):
         }
 
 class DictionariesDialogue:
-    def __init__(self, modules: List[_DictionariesDialogueModule]) -> None:
+    def __init__(self, modules: Sequence[_DictionariesDialogueModule]) -> None:
         self.modules = modules
 
     def toJson(self) -> dict:
@@ -159,8 +163,21 @@ class DictionariesDialogue:
 
 class DictionariesApplication:
     @staticmethod
-    def callDialogue(dialogue: DictionariesDialogue):
+    def callDialogue(dialogue: DictionariesDialogue) -> dict | None:
+        """Note that this function is IO-blocking, and will stop the entire script until the dialogue returns."""
         _internalCall("dialogue.new", {"dialogue": dialogue.toJson()})
+        line = sys.stdin.readline()
+
+        try:
+            if line:
+                line = line.rstrip("\n")
+                data = json.loads(line)
+                if (not isinstance(data, dict)): return None;
+                return data
+        except:
+            pass
+
+        return None
 
     @staticmethod
     def registerFunction(function: DictionariesAddonFunction):

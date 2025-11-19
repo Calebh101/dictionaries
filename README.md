@@ -79,4 +79,4 @@ Addons are Python scripts that can provide extra utilities to Dictionaries. You 
 
 ## How do I make addons?
 
-Use the package `dictionaries-addons-framework` (in `/dictionaries-addons-framework`) to make your addons, then add an addon manually in Dictionaries that points to your main addon source file.
+Use the package [dictionaries-addons-framework](https://pypi.org/project/dictionaries-addons-framework) to make your addons, then add an addon manually in Dictionaries that points to your main addon source file.
