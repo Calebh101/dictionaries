@@ -31,16 +31,19 @@ jobs:
             output-name-arm32: Dictionaries-Linux-arm32
             output-name-arm64: Dictionaries-Linux-arm64
             output-name-riscv64: Dictionaries-Linux-RISCV64
+            build: build/linux/ARCH/release/bundle/dictionaries
           - os: windows-latest
             os-name: windows
             output-name: Dictionaries-Windows-x64
-            oclog-output-name: OCLog-Windows-x64
+            build: build\windows\runner\Release\dictionaries.exe
           - os: macOS-latest
             os-name: macos
             output-name-arm64: Dictionaries-macOS-ARM64
+            build: build/macos/Build/Products/Release/dictonaries
           - os: macOS-15-intel
             os-name: macos
             output-name: Dictionaries-macOS-x64
+            build: build/macos/Build/Products/Release/dictonaries
     steps:
       - name: Checkout
         uses: "actions/checkout@v4"
@@ -59,7 +62,7 @@ jobs:
         shell: bash
         run: |-
           multiarch=false
-          mkdir -p build/${{ matrix.os }}
+          mkdir -p "build/${{ matrix.os }}"
           flutter pub get
           dart run recursive_caster
 
@@ -68,14 +71,25 @@ jobs:
           fi
 
           if [ "$multiarch" == true ]; then
-            echo "Building platform ${{ matrix.os }} with multiarch support"
-            flutter build ${{ matrix.os-name }} -o build/${{ matrix.os }}/${{ matrix.output-name-x64 }} --target-arch x64
-            flutter build ${{ matrix.os-name }} -o build/${{ matrix.os }}/${{ matrix.output-name-arm32 }} --target-arch arm32
-            flutter build ${{ matrix.os-name }} -o build/${{ matrix.os }}/${{ matrix.output-name-arm64 }} --target-arch arm64
-            flutter build ${{ matrix.os-name }} -o build/${{ matrix.os }}/${{ matrix.output-name-riscv64 }} --target-arch riscv64
+            build() {
+                arch=$1
+                outputname=$2
+                echo "Building platform ${{ matrix.os }} for arch $arch"
+
+                flutter build ${{ matrix.os-name }} --target-arch "$arch"
+                build=${{ matrix.build }}
+                build=${build//ARCH/$arch}
+                cp $build "build/${{ matrix.os }}/$outputname"
+            }
+
+            build x64 ${{ matrix.output-name-x64 }}
+            build arm32 ${{ matrix.output-name-arm32 }}
+            build arm64 ${{ matrix.output-name-arm64 }}
+            build riscv64 ${{ matrix.output-name-riscv64 }}
           else
             echo "Building platform ${{ matrix.os }} without multiarch support"
-            flutter build ${{ matrix.os-name }} -o build/${{ matrix.os }}/${{ matrix.output-name }}
+            flutter build ${{ matrix.os-name }}
+            cp "${{ matrix.build }}" "build/${{ matrix.os }}/${{ matrix.output-name }}"
           fi
       - uses: "actions/upload-artifact@v4"
         with:
