@@ -19,6 +19,7 @@ jobs:
     runs-on: "${{ matrix.os }}"
     strategy:
       matrix:
+        arch: [x64, arm64]
         os:
           - ubuntu-latest
           - windows-latest
@@ -27,10 +28,7 @@ jobs:
         include:
           - os: ubuntu-latest
             os-name: linux
-            output-name-x64: Dictionaries-Linux-x64
-            output-name-arm32: Dictionaries-Linux-arm32
-            output-name-arm64: Dictionaries-Linux-arm64
-            output-name-riscv64: Dictionaries-Linux-RISCV64
+            output-name: Dictionaries-Linux-x64
             build: build/linux/ARCH/release/bundle/dictionaries
           - os: windows-latest
             os-name: windows
@@ -62,36 +60,14 @@ jobs:
         shell: bash
         run: |-
           multiarch=false
-          mkdir -p "build/${{ matrix.os }}"
+          mkdir -p "build/${{ matrix.os }}/${{ matrix.arch }}"
           flutter pub get
           dart run recursive_caster
 
-          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            multiarch=true
-          fi
-
-          if [ "$multiarch" == true ]; then
-            build() {
-                arch=$1
-                outputname=$2
-                echo "Building platform ${{ matrix.os }} for arch $arch"
-
-                flutter build ${{ matrix.os-name }} --target-arch "$arch"
-                build=${{ matrix.build }}
-                build=${build//ARCH/$arch}
-                cp $build "build/${{ matrix.os }}/$outputname"
-            }
-
-            build x64 ${{ matrix.output-name-x64 }}
-            build arm32 ${{ matrix.output-name-arm32 }}
-            build arm64 ${{ matrix.output-name-arm64 }}
-            build riscv64 ${{ matrix.output-name-riscv64 }}
-          else
-            echo "Building platform ${{ matrix.os }} without multiarch support"
-            flutter build ${{ matrix.os-name }}
-            cp "${{ matrix.build }}" "build/${{ matrix.os }}/${{ matrix.output-name }}"
-          fi
+          echo "Building platform ${{ matrix.os }} without multiarch support"
+          flutter build ${{ matrix.os-name }} --release
+          cp "${{ matrix.build }}" "build/${{ matrix.os }}/${{ matrix.arch }}/${{ matrix.output-name }}"
       - uses: "actions/upload-artifact@v4"
         with:
           name: "executables-${{ github.run_id }}-${{ matrix.os }}"
-          path: "build/${{ matrix.os }}"
+          path: "build/${{ matrix.os }}/${{ matrix.arch }}"
