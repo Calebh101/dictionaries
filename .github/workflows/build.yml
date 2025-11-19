@@ -32,15 +32,15 @@ jobs:
           - os: windows-latest
             os-name: windows
             output-name: Dictionaries-Windows-x64
-            build: build\windows\runner\Release\dictionaries.exe
+            build: build\windows\x64\runner\Release\dictionaries.exe
           - os: macOS-latest
             os-name: macos
             output-name-arm64: Dictionaries-macOS-arm64
-            build: build/macos/Build/Products/Release/dictonaries
+            build: build/macos/Build/Products/Release/Dictionaries.app
           - os: macOS-15-intel
             os-name: macos
             output-name: Dictionaries-macOS-x64
-            build: build/macos/Build/Products/Release/dictonaries
+            build: build/macos/Build/Products/Release/Dictionaries.app
     steps:
       - name: Checkout
         uses: "actions/checkout@v4"
