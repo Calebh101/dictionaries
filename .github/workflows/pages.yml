@@ -26,7 +26,7 @@ jobs:
       - name: Flutter - Build for Web
         run: |
           flutter pub get
-          flutter run recursive_caster
+          dart run recursive_caster
           flutter build web --release --no-wasm-dry-run
 
       - name: Upload artifact
