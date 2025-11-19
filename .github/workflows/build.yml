@@ -21,7 +21,6 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - ubuntu-24.04-arm
           - windows-latest
           - macOS-latest
           - macOS-15-intel
@@ -29,10 +28,6 @@ jobs:
           - os: ubuntu-latest
             os-name: linux
             output-name: Dictionaries-Linux-x64
-            build: build/linux/x64/release/bundle/dictionaries
-          - os: ubuntu-24.04-arm
-            os-name: linux
-            output-name: Dictionaries-Linux-arm64
             build: build/linux/x64/release/bundle/dictionaries
           - os: windows-latest
             os-name: windows
@@ -67,6 +62,11 @@ jobs:
           mkdir -p "build/${{ matrix.os }}"
           flutter pub get
           dart run recursive_caster
+
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            apt-get update -y && apt-get upgrade -y
+            apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev
+          fi
 
           echo "Building platform ${{ matrix.os }} without multiarch support"
           flutter build ${{ matrix.os-name }} --release
