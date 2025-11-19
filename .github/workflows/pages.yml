@@ -17,14 +17,16 @@ jobs:
     steps:
       - name: Repository - Checkout
         uses: actions/checkout@v4
-      
+
       - name: Flutter - Setup
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
       - name: Flutter - Build for Web
-        run: flutter build web --release --no-wasm-dry-run
+        run: |
+          flutter run recursive_caster
+          flutter build web --release --no-wasm-dry-run
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -5,6 +5,9 @@
   <a href="https://github.com/Calebh101/dictionaries/actions/workflows/pages.yml">
     <img src="https://github.com/Calebh101/dictionaries/actions/workflows/pages.yml/badge.svg">
   </a>
+  <a href="https://pypi.org/project/dictionaries-addons-framework">
+    <img src="https://img.shields.io/pypi/v/dictionaries-addons-framework.svg">
+  </a>
 </p>
 
 Hello, and welcome to Dictionaries! This is a cross-platform tool to view your "dictionaries", which are files like YAML, JSON, PList, my custom file type, `.dictionary`, and potentially more to come.
@@ -79,4 +82,4 @@ Addons are Python scripts that can provide extra utilities to Dictionaries. You 
 
 ## How do I make addons?
 
-Use the package [dictionaries-addons-framework](https://pypi.org/project/dictionaries-addons-framework) to make your addons, then add an addon manually in Dictionaries that points to your main addon source file.
+Use the PyPi package [dictionaries-addons-framework](https://pypi.org/project/dictionaries-addons-framework) to make your addons, then add an addon manually in Dictionaries that points to your main addon source file.
