@@ -70,7 +70,7 @@ jobs:
 
           echo "Building platform ${{ matrix.os }} without multiarch support"
           flutter build ${{ matrix.os-name }} --release
-          cp "${{ matrix.build }}" "build/${{ matrix.os }}/${{ matrix.output-name }}"
+          cp -r "${{ matrix.build }}" "build/${{ matrix.os }}/${{ matrix.output-name }}"
       - uses: "actions/upload-artifact@v4"
         with:
           name: "executables-${{ github.run_id }}-${{ matrix.os }}"
