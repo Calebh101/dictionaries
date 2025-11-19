@@ -4,6 +4,7 @@
 *.pyc
 *.swp
 .DS_Store
+recursive_caster.g.dart
 .atom/
 .build/
 .buildlog/

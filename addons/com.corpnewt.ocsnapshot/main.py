@@ -1,4 +1,9 @@
 from typing import List
+import sys
+
+sys.path.insert(0, "./lib")
+sys.path.insert(0, "./OCSnapshot")
+
 from dictionaries_addons_framework import addons
 import tempfile
 from OCSnapshot import OCSnapshot
@@ -12,11 +17,12 @@ class OCSnapshotAddon(addons.DictionariesAddon):
         raise NotImplementedError
 
 addon = OCSnapshotAddon()
+addon.register()
 
 def askForOCFolder() -> Path | None:
     dialogue = addons.DictionariesDialogue(modules=[
-        addons.DictionariesDialogueTextModule(text="Please select your OC folder of your EFI."),
-        addons.DictionariesDialogueTextInputModule(hint="EFI/OC", isFolderSelect=True, isFileSelect=False)
+        addons.DictionariesDialogueTextModule(parent=addon, text="Please select your OC folder of your EFI."),
+        addons.DictionariesDialogueTextInputModule(parent=addon, hint="EFI/OC", isFolderSelect=True, isFileSelect=False)
     ])
 
     result = addons.DictionariesApplication.callDialogue(dialogue=dialogue)
@@ -26,8 +32,9 @@ def askForOCFolder() -> Path | None:
     return None;
 
 class OCSnapshotFunction(addons.DictionariesAddonFunction):
-    def __init__(self) -> None:
-        super().__init__(name="OC Snapshot", description="Perform an OC Snapshot on a config.plist. From CorpNewt's ProperTree.", inputs=[addons.DictionariesAddonFunctionInputType.PLIST_UTF8], outputs=[addons.DictionariesAddonFunctionOutputType.PLIST_UTF8])
+    def __init__(self, clean=False) -> None:
+        self.clean = clean
+        super().__init__(parent=addon, name=" ".join((["Clean"] if clean else []) + ["OC", "Snapshot"]), description="Perform an OC Snapshot on a config.plist. From CorpNewt's ProperTree.", inputs=[addons.DictionariesAddonFunctionInputType.PLIST_UTF8], outputs=[addons.DictionariesAddonFunctionOutputType.PLIST_UTF8])
 
     def run(self, inputs: List[object]) -> object | None:
         directory = Path(tempfile.gettempdir())
@@ -36,7 +43,7 @@ class OCSnapshotFunction(addons.DictionariesAddonFunction):
 
         if not oc or not oc.exists():
             dialogue = addons.DictionariesDialogue(modules=[
-                addons.DictionariesDialogueTextModule(text="Unable to OC snapshot: OC folder doesn't exist.")
+                addons.DictionariesDialogueTextModule(parent=addon, text="Unable to OC snapshot: OC folder doesn't exist.")
             ])
 
             addons.DictionariesApplication.callDialogue(dialogue=dialogue)
@@ -48,9 +55,15 @@ class OCSnapshotFunction(addons.DictionariesAddonFunction):
             file.close()
 
             snapshotter = OCSnapshot.OCSnapshot()
-            snapshotter.snapshot(str(path), str(path), oc, False)
+            snapshotter.snapshot(str(path), str(path), oc, self.clean)
 
             with open(str(path), "r", encoding="utf-8") as file:
                 data = file.read()
                 addons.Logger.print("Read new plist file...")
                 return data
+
+function1 = OCSnapshotFunction(clean=False)
+function2 = OCSnapshotFunction(clean=True)
+
+function1.register()
+function2.register()

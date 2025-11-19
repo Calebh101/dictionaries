@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:collection/collection.dart';
+import 'package:dictionaries/src/addons.dart';
 import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/main.dart';
 import 'package:dictionaries/src/nodes.dart';
@@ -9,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:localpkg_flutter/localpkg.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:dictionaries/files/files.dart';
 
@@ -17,9 +20,12 @@ final Version binaryVersion = Version.parse("1.0.0A");
 
 Uri? sourceUri;
 
-void main() {
+Future<void> main() async {
   if (kDebugMode) Logger.enable();
-  if (kDebugMode) Logger.setVerbose(false);
+  if (kDebugMode) Logger.setVerbose(true);
+
+  Logger.print("Found application directory as ${(await maindir).path}");
+  if (Addon.enabled) Addon.init();
   runApp(const MainApp());
 }
 
@@ -381,3 +387,5 @@ String? getFileNameFromResponse(http.Response response) {
   final match = regex.firstMatch(contentDisposition);
   return match?.group(1);
 }
+
+Future<Directory> get maindir async => (await getApplicationSupportDirectory())..create(recursive: true);

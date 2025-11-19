@@ -15,6 +15,11 @@ dependencies:
       url: https://github.com/Calebh101/localpkg-flutter-2.git
       ref: f571d1665760fcc2fadab376f56b4b4e12ca2f1a
 
+  recursive_caster:
+    git:
+      url: https://github.com/Calebh101/dart-recursive-caster.git
+      ref: main
+
   file_picker: ^10.3.3
   file_saver: ^0.3.1
   flutter_environments_plus: ^1.0.1
@@ -42,6 +47,8 @@ dependencies:
   undo: ^1.5.0
   http: ^1.5.0
   yaml_edit: ^2.2.2
+  path_provider: ^2.1.5
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
