@@ -21,6 +21,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+          - ubuntu-24.04-arm
           - windows-latest
           - macOS-latest
           - macOS-15-intel
@@ -29,7 +30,7 @@ jobs:
             os-name: linux
             output-name: Dictionaries-Linux-x64
             build: build/linux/x64/release/bundle/dictionaries
-          - os: ubuntu-latest-arm
+          - os: ubuntu-24.04-arm
             os-name: linux
             output-name: Dictionaries-Linux-arm64
             build: build/linux/x64/release/bundle/dictionaries
@@ -39,7 +40,7 @@ jobs:
             build: build\windows\runner\Release\dictionaries.exe
           - os: macOS-latest
             os-name: macos
-            output-name-arm64: Dictionaries-macOS-ARM64
+            output-name-arm64: Dictionaries-macOS-arm64
             build: build/macos/Build/Products/Release/dictonaries
           - os: macOS-15-intel
             os-name: macos
