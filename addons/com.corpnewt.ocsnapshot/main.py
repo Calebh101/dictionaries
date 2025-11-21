@@ -34,7 +34,7 @@ def askForOCFolder() -> Path | None:
 class OCSnapshotFunction(addons.DictionariesAddonFunction):
     def __init__(self, clean=False) -> None:
         self.clean = clean
-        super().__init__(parent=addon, name=" ".join((["Clean"] if clean else []) + ["OC", "Snapshot"]), description="Perform an OC Snapshot on a config.plist. From CorpNewt's ProperTree.", inputs=[addons.DictionariesAddonFunctionInputType.PLIST_UTF8], outputs=[addons.DictionariesAddonFunctionOutputType.PLIST_UTF8])
+        super().__init__(id="OCSnapshotFunction", parent=addon, name=" ".join((["Clean"] if clean else []) + ["OC", "Snapshot"]), description="Perform an OC Snapshot on a config.plist. From CorpNewt's ProperTree.", inputs=[addons.DictionariesAddonFunctionInputType.PLIST_UTF8], outputs=[addons.DictionariesAddonFunctionOutputType.PLIST_UTF8])
 
     def run(self, inputs: List[object]) -> object | None:
         directory = Path(tempfile.gettempdir())

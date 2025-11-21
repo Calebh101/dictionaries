@@ -9,9 +9,22 @@ import random
 import string
 import sys
 import threading
-from typing import List, Sequence
+from typing import Sequence
 
-registeredAddons: List[DictionariesAddon] = []
+def tryParse(value):
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return None
+
+def argAt(index: int) -> str | None:
+    if 0 <= index < len(sys.argv): return sys.argv[index]
+    return None
+
+runId: str | None = argAt(1)
+runData: dict | list | None = tryParse(argAt(2))
 
 class DictionariesAddonFunctionInputType(Enum):
     PLIST_UTF8 = 1
@@ -44,9 +57,9 @@ def _internalCall(type: str, data: dict):
 
 class DictionariesAddon(ABC):
     """Base class addon authors inherit from.\n\nYou *must* call `register()` on this object."""
-    registeredFunctions: List[DictionariesAddonFunction] = []
+    registeredFunctions: list[DictionariesAddonFunction] = []
 
-    def __init__(self, name: str, description: str, version: str, author: str | List[str] | None = None, website: str | None = None) -> None:
+    def __init__(self, name: str, description: str, version: str, author: str | list[str] | None = None, website: str | None = None) -> None:
         self.name = name
         self.version = version
         self.description = description
@@ -72,22 +85,22 @@ class DictionariesAddon(ABC):
         }
 
     def register(self) -> None:
+        if (runId): return
         _internalCall(type="addon.register", data=self.toJson())
-        registeredAddons.append(self)
 
 class DictionariesAddonFunction(ABC):
     """Class for making Python functions that can take inputs and output something.\n\nYour addon needs to register this with `register()`."""
 
-    def __init__(self, parent: DictionariesAddon, name: str, description: str, inputs: List[DictionariesAddonFunctionInputType], outputs: List[DictionariesAddonFunctionOutputType]) -> None:
+    def __init__(self, id: str, parent: DictionariesAddon, name: str, description: str, inputs: list[DictionariesAddonFunctionInputType], outputs: list[DictionariesAddonFunctionOutputType]) -> None:
         self.name = name
         self.description = description
         self.inputs = inputs
         self.outputs = outputs
-        self.id = ''.join(random.choice(string.ascii_letters) for _ in range(8))
+        self.id = id
         self.parent = parent
 
     @abstractmethod
-    def run(self, inputs: List[object]) -> object | None:
+    def run(self, inputs: list[object]) -> object | None:
         """Return the object type you inputted when the script is run.\n\nThis function must be overriden."""
         raise NotImplementedError()
 
@@ -101,14 +114,18 @@ class DictionariesAddonFunction(ABC):
         }
 
     def register(self) -> None:
-        _internalCall("function.register", {"function": self.toJson()})
-        self.parent.registeredFunctions.append(self)
+        if (runId is None):
+            _internalCall("function.register", {"function": self.toJson()})
+            self.parent.registeredFunctions.append(self)
+
+        if (runId == self.id and isinstance(runData, list)):
+            self.run(runData)
 
 class DictionariesDialogueModule(ABC):
     def __init__(self, parent: DictionariesAddon, type: DictionariesDialogueModuleType) -> None:
         self.type = type
-        self.id = ''.join(random.choice(string.ascii_letters) for _ in range(8))
         self.parent = parent
+        self.id = ''.join(random.choice(string.ascii_letters) for _ in range(8))
 
     @abstractmethod
     def getResult(self):
