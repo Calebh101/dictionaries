@@ -55,39 +55,6 @@ class Logger:
 def _internalCall(type: str, data: dict):
     print(f"_DICTIONARIES_INTERNAL_API_CALL: {json.dumps({"type": type, "data": data})}")
 
-class DictionariesAddon(ABC):
-    """Base class addon authors inherit from.\n\nYou *must* call `register()` on this object."""
-    registeredFunctions: list[DictionariesAddonFunction] = []
-
-    def __init__(self, name: str, description: str, version: str, author: str | list[str] | None = None, website: str | None = None) -> None:
-        self.name = name
-        self.version = version
-        self.description = description
-        self.website = website
-
-        if isinstance(author, str):
-            self.author = [author]
-        else:
-            self.author = author or []
-
-    @abstractmethod
-    def onInitialize(self) -> None:
-        """When Dictionaries is intialized, this function is ran."""
-        pass
-
-    def toJson(self) -> dict:
-        return {
-            "name": self.name,
-            "version": self.version,
-            "description": self.description,
-            "website": self.website,
-            "authors": self.author
-        }
-
-    def register(self) -> None:
-        if (runId): return
-        _internalCall(type="addon.register", data=self.toJson())
-
 class DictionariesAddonFunction(ABC):
     """Class for making Python functions that can take inputs and output something.\n\nYour addon needs to register this with `register()`."""
 
@@ -120,6 +87,39 @@ class DictionariesAddonFunction(ABC):
 
         if (runId == self.id and isinstance(runData, list)):
             self.run(runData)
+
+class DictionariesAddon(ABC):
+    """Base class addon authors inherit from.\n\nYou *must* call `register()` on this object."""
+    registeredFunctions: list[DictionariesAddonFunction] = []
+
+    def __init__(self, name: str, description: str, version: str, author: str | list[str] | None = None, website: str | None = None) -> None:
+        self.name = name
+        self.version = version
+        self.description = description
+        self.website = website
+
+        if isinstance(author, str):
+            self.author = [author]
+        else:
+            self.author = author or []
+
+    @abstractmethod
+    def onInitialize(self) -> None:
+        """When Dictionaries is intialized, this function is ran."""
+        pass
+
+    def toJson(self) -> dict:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "description": self.description,
+            "website": self.website,
+            "authors": self.author
+        }
+
+    def register(self) -> None:
+        if (runId): return
+        _internalCall(type="addon.register", data=self.toJson())
 
 class DictionariesDialogueModule(ABC):
     def __init__(self, parent: DictionariesAddon, type: DictionariesDialogueModuleType) -> None:
