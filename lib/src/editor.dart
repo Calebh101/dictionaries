@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:any_date/any_date.dart';
 import 'package:collection/collection.dart';
+import 'package:dictionaries/addons.dart';
 import 'package:dictionaries/files/files.dart';
 import 'package:dictionaries/main.dart';
 import 'package:dictionaries/src/nodeenums.dart';
@@ -209,147 +210,108 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
             builder: (context, details) {
               var contextMenu = cm.ContextMenu(entries: contextMenuEntries);
 
-              return InkWell(
-                child: Padding(
-                  padding: const EdgeInsets.all(0),
-                  child: TreeIndentation(
-                    child: Row(
-                      children: [
-                        ExpandIcon(
-                          size: 24,
-                          padding: EdgeInsets.zero,
-                          isExpanded: entry.isExpanded,
-                          onPressed: (value) => controller.toggleExpansion(node),
-                        ),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              double maxWidth = MediaQuery.of(context).size.width;
-                              double width2 = 100;
-                              double width3 = maxWidth * 0.3;
-                              double width1 = constraints.maxWidth - width2 - width3;
-
-                              return Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  SizedBox(
-                                    width: width1,
-                                    child: SelectableText("Root", textAlign: TextAlign.left),
-                                  ),
-                                  SizedBox(
-                                    width: width3,
-                                    child: SelectableText("${node.children.length} ${Word.fromCount(node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}"),
-                                  ),
-                                  SizedBox(
-                                    width: width2,
-                                    child: DropdownButton<RootNodeType>(items: RootNodeType.values.map((type) {
-                                      return DropdownMenuItem<RootNodeType>(
-                                        alignment: AlignmentGeometry.center,
-                                        value: type,
-                                        child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
-                                      );
-                                    }).toList(), onChanged: (type) {
-                                      if (type == null) return;
-                                      if (type == root.type) return;
-
-                                      late void Function() change;
-                                      late void Function(({RootNodeType type, Iterable<NodeData> children}) r) undo;
-
-                                      var old = (
-                                        type: root.type,
-                                        children: List<NodeData>.from(root.children),
-                                      );
-
-                                      root.type = type;
-                                      Logger.print("Set root type to ${root.type}");
-
-                                      if (type == RootNodeType.map) {
-                                        change = () {
-                                          List<NodeKeyValuePair> children = [];
-
-                                          for (NodeData child in root.children) {
-                                            if (child is Node) {
-                                              children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
-                                            } else if (child is NodeKeyValuePair) {
-                                              children.add(child);
-                                            }
-                                          }
-
-                                          root.children.clear();
-                                          for (var child in children) root.children.add(child);
-                                          refresh(rebuild: true);
-                                        };
-                                      } else if (type == RootNodeType.array) {
-                                        change = () {
-                                          List<Node> children = [];
-
-                                          for (NodeData child in root.children) {
-                                            if (child is Node) {
-                                              children.add(child);
-                                            } else if (child is NodeKeyValuePair) {
-                                              children.add(child.node);
-                                            }
-                                          }
-
-                                          root.children.clear();
-                                          for (var child in children) root.children.add(child);
-                                          refresh(rebuild: true);
-                                        };
-                                      }
-
-                                      undo = (r) {
-                                        Logger.print("Restoring root data: $r");
-                                        root.type = r.type;
-                                        root.children.clear();
-
-                                        for (var child in r.children) {
-                                          root.children.add(child);
-                                        }
-
-                                        Logger.print("Added ${root.children.length} children from ${r.children.length} provided");
-                                        refresh(rebuild: true);
-                                      };
-
-                                      var changeData = Change<({RootNodeType type, Iterable<NodeData> children})>(
-                                        old,
-                                        change,
-                                        undo,
-                                      );
-
-                                      changes.add(changeData);
-                                      refresh();
-                                    }, value: root.type),
-                                  ),
-                                ],
-                              );
-                            }
-                          ),
-                        ),
-                        Builder(
-                          builder: (context) {
-                            return IconButton(onPressed: () async {
-                              var box = context.findRenderObject() as RenderBox;
-                              var pos = box.localToGlobal(Offset.zero);
-                              var previous = contextMenu.position == null ? null : Offset(contextMenu.position!.dx, contextMenu.position!.dy);
-                              contextMenu.position = pos;
-                              await contextMenu.show(context);
-                              contextMenu.position = previous;
-                            }, icon: Icon(Icons.more_vert), padding: EdgeInsets.zero);
-                          }
-                        ),
-                        SizedBox(width: 40),
-                      ],
-                    ),
-                    guide: IndentGuide.connectingLines(
-                      indent: 24,
-                      thickness: 1,
-                      color: Colors.grey,
-                    ),
-                    entry: entry,
-                  ),
+              return DictionariesRootNodeWidget(
+                entry: entry,
+                expandIcon: ExpandIcon(
+                  size: 24,
+                  padding: EdgeInsets.zero,
+                  isExpanded: entry.isExpanded,
+                  onPressed: (value) => controller.toggleExpansion(node),
                 ),
-              );
-            }
+                nameText: SelectableText("Root", textAlign: TextAlign.left),
+                childrenCountText: SelectableText("${node.children.length} ${Word.fromCount(node.children.length, singular: Word("Child"), plural: Word("Children")).toString()}"),
+                typeSelector: DropdownButton<RootNodeType>(items: RootNodeType.values.map((type) {
+                  return DropdownMenuItem<RootNodeType>(
+                    alignment: AlignmentGeometry.center,
+                    value: type,
+                    child: Text(nodeTypeToString(rootNodeTypeToNodeType(type)), textAlign: TextAlign.center),
+                  );
+                }).toList(), onChanged: (type) {
+                  if (type == null) return;
+                  if (type == root.type) return;
+
+                  late void Function() change;
+                  late void Function(({RootNodeType type, Iterable<NodeData> children}) r) undo;
+
+                  var old = (
+                    type: root.type,
+                    children: List<NodeData>.from(root.children),
+                  );
+
+                  root.type = type;
+                  Logger.print("Set root type to ${root.type}");
+
+                  if (type == RootNodeType.map) {
+                    change = () {
+                      List<NodeKeyValuePair> children = [];
+
+                      for (NodeData child in root.children) {
+                        if (child is Node) {
+                          children.add(NodeKeyValuePair(key: child.index.toString(), value: child));
+                        } else if (child is NodeKeyValuePair) {
+                          children.add(child);
+                        }
+                      }
+
+                      root.children.clear();
+                      for (var child in children) root.children.add(child);
+                      refresh(rebuild: true);
+                    };
+                  } else if (type == RootNodeType.array) {
+                    change = () {
+                      List<Node> children = [];
+
+                      for (NodeData child in root.children) {
+                        if (child is Node) {
+                          children.add(child);
+                        } else if (child is NodeKeyValuePair) {
+                          children.add(child.node);
+                        }
+                      }
+
+                      root.children.clear();
+                      for (var child in children) root.children.add(child);
+                      refresh(rebuild: true);
+                    };
+                  }
+
+                  undo = (r) {
+                    Logger.print("Restoring root data: $r");
+                    root.type = r.type;
+                    root.children.clear();
+
+                    for (var child in r.children) {
+                      root.children.add(child);
+                    }
+
+                    Logger.print("Added ${root.children.length} children from ${r.children.length} provided");
+                    refresh(rebuild: true);
+                  };
+
+                  var changeData = Change<({RootNodeType type, Iterable<NodeData> children})>(
+                    old,
+                    change,
+                    undo,
+                  );
+
+                  changes.add(changeData);
+                  refresh();
+                }, value: root.type),
+                contextMenuButton: IconButton(onPressed: () async {
+                  var box = context.findRenderObject() as RenderBox;
+                  var pos = box.localToGlobal(Offset.zero);
+                  var previous = contextMenu.position == null ? null : Offset(contextMenu.position!.dx, contextMenu.position!.dy);
+                  contextMenu.position = pos;
+                  await contextMenu.show(context);
+                  contextMenu.position = previous;
+                }, icon: Icon(Icons.more_vert), padding: EdgeInsets.zero),
+                indentGuide: IndentGuide.connectingLines(
+                  indent: 24,
+                  thickness: 1,
+                  color: Colors.grey,
+                ),
+              ).apply(context, DictionariesWidgetInjectionTarget.rootNode);
+            },
           );
         }
 

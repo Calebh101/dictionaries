@@ -15,11 +15,6 @@ dependencies:
       url: https://github.com/Calebh101/localpkg-flutter-2.git
       ref: f571d1665760fcc2fadab376f56b4b4e12ca2f1a
 
-  recursive_caster:
-    git:
-      url: https://github.com/Calebh101/dart-recursive-caster.git
-      ref: main
-
   file_picker: ^10.3.3
   file_saver: ^0.3.1
   flutter_environments_plus: ^1.0.1
@@ -50,9 +45,19 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
 
+  # Addon-related dependencies
+
+  make_root_say_banana:
+    path: addons/make_root_say_banana
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  recursive_caster:
+    git:
+      url: https://github.com/Calebh101/dart-recursive-caster.git
+      ref: main
 
   flutter_lints: ^5.0.0
   flutter_native_splash: ^2.4.7

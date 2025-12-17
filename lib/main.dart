@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
-import 'package:dictionaries/src/addons.dart';
+import 'package:dictionaries/addons.dart';
+import 'package:dictionaries/src/addonloader.dart';
 import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/main.dart';
 import 'package:dictionaries/src/nodes.dart';
@@ -19,13 +20,15 @@ final Version version = Version.parse("0.0.0A");
 final Version binaryVersion = Version.parse("1.0.0A");
 
 Uri? sourceUri;
+List<DictionariesAddon> injectedAddons = [];
+List<DictionariesUIInjection> injectedAddonUIs = [];
 
 Future<void> main() async {
   if (kDebugMode) Logger.enable();
   if (kDebugMode) Logger.setVerbose(true);
 
   Logger.print("Found application directory as ${(await maindir).path}");
-  if (Addon.enabled) Addon.init();
+  await loadAddons();
   runApp(const MainApp());
 }
 
@@ -34,7 +37,7 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    var app = MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
@@ -42,6 +45,12 @@ class MainApp extends StatelessWidget {
       home: Home(),
       title: "Dictionaries",
     );
+
+    for (var ui in injectedAddonUIs.whereType<DictionariesMaterialAppInjection>()) {
+      app = ui.build(context, app);
+    }
+
+    return app;
   }
 }
 
