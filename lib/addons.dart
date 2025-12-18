@@ -18,7 +18,7 @@ abstract class DictionariesAddon {
   final List<String> authors;
   final Uri? mainpage;
   final Uri? repository;
-  final bool alwaysEnableThisAddon;
+  final bool doNotShow;
 
   DictionariesAddon({
     required this.name,
@@ -28,15 +28,17 @@ abstract class DictionariesAddon {
     this.description,
     this.mainpage,
     this.repository,
-    this.alwaysEnableThisAddon = false,
+    this.doNotShow = false,
   });
 
-  FutureOr<void> register() async {
+  FutureOr<void> register(bool debug) async {
     injectedAddons.add(this);
-    await onRegister();
+    await onRegister(debug);
   }
 
-  FutureOr<void> onRegister();
+  FutureOr<void> onRegister(bool debug);
+
+  bool get doShow => !doNotShow;
 }
 
 abstract class DictionariesUIInjection {

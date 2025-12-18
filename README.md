@@ -74,12 +74,21 @@ Run `dart run bin/signatures.dart` to know all the different signatures.
 
 ## Dynamic Numbers
 
-Dynamic numbers are numbers that use a dynamic amount of bytes. They consist of one byte as a signature for the number, and a dynamic amount of bytes afterwards for the content, based on the signature. See the [`DynamicNumber` Documentation](https://github.com/Calebh101/localpkg-dart#dynamic-numbers) for how to parse them.
+Dynamic numbers are numbers that use a dynamic amount of bytes. They consist of one byte as a signature for the number, and a dynamic amount of bytes afterwards for the content, based on the signature. See my [`DynamicNumber` Documentation](https://github.com/Calebh101/localpkg-dart#dynamic-numbers) for how to parse them.
 
 # Addons
 
-Addons are Python scripts that can provide extra utilities to Dictionaries. You can use them by going to Addons > Manage Addons in the menu bar.
+Addons. This is gonna be so cool when I finish it.
 
-## How do I make addons?
+Addons are basically like VS Code extensions. They can inject lots of cool things, like menu bar additions, UI elements, themes, and utilities. Hopefully I made the API easy to use.
 
-Use the PyPi package [dictionaries-addons-framework](https://pypi.org/project/dictionaries-addons-framework) to make your addons, then add an addon manually in Dictionaries that points to your main addon source file.
+To use the API, you need to add this project as a dependency. You can do this by cloning the repository, adding it as a local package, and importing `package:dictionaries/addons.dart`. This allows you to communicate with the addons API, which communicates with internal Dictionaries APIs.
+
+To debug your addon, open `/pubspec.yaml` and add your addon as a dependency. Then, open `/lib/src/debugaddonloader.dart` and add your load function (and execute it) to the list. Your addon will then be loaded in debug mode on startup.
+
+## Included Addons
+
+I've included several addons with Dictionaries. They reside in `/addons`.
+
+- `/addons/make_root_say_banana` does exactly that. It injects and modifies UI elements in the `DictionariesRootNodeWidget`. You can use this as a quick start reference.
+- `/addons/oc_snapshot` is an addon that uses my Dart port of [CorpNewt's OCSnapshot](https://github.com/corpnewt/OCSnapshot) for use with Dictionaries.

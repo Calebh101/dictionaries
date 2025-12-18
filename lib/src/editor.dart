@@ -212,6 +212,7 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
 
               return DictionariesRootNodeWidget(
                 entry: entry,
+                trailingPadding: 40,
                 expandIcon: ExpandIcon(
                   size: 24,
                   padding: EdgeInsets.zero,

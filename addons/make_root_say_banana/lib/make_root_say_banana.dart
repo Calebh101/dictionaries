@@ -4,11 +4,6 @@ import 'package:dictionaries/addons.dart';
 import 'package:flutter/material.dart';
 
 DictionariesAddon load() {
-  DictionariesWidgetInjection(target: DictionariesWidgetInjectionTarget.rootNode, build: (context, widget) {
-    widget = widget as DictionariesRootNodeWidget;
-    return widget..nameText = SelectableText("Banana!");
-  }).register();
-
   return MakeRootSayBanana();
 }
 
@@ -19,9 +14,18 @@ class MakeRootSayBanana extends DictionariesAddon {
     id: "com.calebh101.make_root_say_banana",
     version: "1.0.0A",
     authors: ["Calebh101"],
-    alwaysEnableThisAddon: true,
+    doNotShow: false,
   );
 
   @override
-  FutureOr<void> onRegister() {}
+  FutureOr<void> onRegister(bool debug) {
+    DictionariesWidgetInjection(target: DictionariesWidgetInjectionTarget.rootNode, build: (context, widget) {
+    widget = widget as DictionariesRootNodeWidget;
+    return widget..nameText = SelectableText("Banana!")..addWidget(DictionariesRootNodeSlot.beforeContextMenuButton, IconButton(onPressed: () {
+      showDialog(context: context, builder: (context) => AlertDialog(
+        content: Text('BANANA 🍌'),
+      ));
+    }, icon: Text('🍌')));
+  }).register();
+  }
 }
