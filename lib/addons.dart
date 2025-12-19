@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:dictionaries/src/widgetframework.dart';
 
 export 'package:dictionaries/src/widgetframework.dart';
+export 'package:dictionaries/src/menubar.dart' show DictionariesMenuBarEntry, DictionariesMenuBarInjection;
 
 /// This class is what you base your entire addon around.
 /// You will make a new class that inherits this class and provides the info and permissions.

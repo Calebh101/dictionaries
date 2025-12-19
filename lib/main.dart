@@ -22,6 +22,7 @@ final Version binaryVersion = Version.parse("1.0.0A");
 Uri? sourceUri;
 List<DictionariesAddon> injectedAddons = [];
 List<DictionariesUIInjection> injectedAddonUIs = [];
+List<DictionariesMenuBarInjection> injectedMenuEntries = [];
 
 Future<void> main() async {
   if (kDebugMode) Logger.enable();
