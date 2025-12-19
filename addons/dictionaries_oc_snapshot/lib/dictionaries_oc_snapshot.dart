@@ -11,7 +11,6 @@ import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 late bool forceUpdateSchema;
-OpenCoreVersion? openCoreVersion;
 
 DictionariesAddon load() {
   return OcSnapshotAddon();
@@ -21,7 +20,7 @@ void showSnackBar(BuildContext context, String text) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 }
 
-void snapshot(BuildContext context, bool clean) async {
+void snapshot(AddonContext aContext, BuildContext context, bool clean) async {
   final data = RootNode.instance.toJson();
   if (data is! Map) return;
   String? selected = await FilePicker.platform.getDirectoryPath(dialogTitle: "Select your OC Folder");
@@ -45,24 +44,35 @@ void snapshot(BuildContext context, bool clean) async {
 
     if ([acpi, kexts, drivers, tools].any((x) => !x.existsSync())) {
       if (oc.existsSync()) {
-        AddonLogger.print("Subfolder OC detected, rebasing there...");
+        AddonLogger.print(aContext, "Subfolder OC detected, rebasing there...");
         directory = oc;
         continue;
       } else {
-        AddonLogger.print("Either ACPI, Kexts, Drivers, or Tools doesn't exist in OC folder");
+        AddonLogger.print(aContext, "Either ACPI, Kexts, Drivers, or Tools doesn't exist in OC folder");
         showSnackBar(context, "Either ACPI, Kexts, Drivers, or Tools doesn't exist in your OC folder.");
         break;
       }
     }
 
     if (!opencore.existsSync()) {
-      AddonLogger.print("OpenCore.efi doesn't exist, ignoring.");
+      AddonLogger.print(aContext, "OpenCore.efi doesn't exist, ignoring.");
     }
 
-    final result = OCSnapshot.snapshot(data, files: (acpi: OCSnapshot.listDirectory(acpi), kexts: OCSnapshot.listKexts(kexts), drivers: OCSnapshot.listDirectory(drivers), tools: OCSnapshot.listDirectory(tools)), opencoreVersion: openCoreVersion, opencoreHash: opencore.existsSync() ? await hash(opencore) : null, clean: clean, forceUpdateSchema: forceUpdateSchema, onLog: AddonLogger.print);
+    final result = OCSnapshot.snapshot(
+      data, files: (
+        acpi: OCSnapshot.listDirectory(acpi),
+        kexts: OCSnapshot.listKexts(kexts),
+        drivers: OCSnapshot.listDirectory(drivers),
+        tools: OCSnapshot.listDirectory(tools),
+      ),
+      opencoreHash: opencore.existsSync() ? await hash(opencore) : null,
+      clean: clean,
+      forceUpdateSchema: forceUpdateSchema,
+      onLog: (x) => AddonLogger.print(aContext, x),
+    );
 
     RootNode.instance.reapply(result, null);
-    AddonLogger.print("Returned from snapshotting");
+    AddonLogger.print(aContext, "Returned from snapshotting");
     if (!context.mounted) return;
     showSnackBar(context, "Done snapshotting!");
     break;
@@ -95,10 +105,10 @@ class OcSnapshotAddon extends DictionariesAddon {
       DictionariesMenuBarInjection(["File"], [
         DictionariesMenuBarEntry.divider("OCSnapshotDivider"),
         DictionariesMenuBarEntry("OC Snapshot", onActivate: (context) {
-          snapshot(context, false);
+          snapshot(addonContext, context, false);
         }),
         DictionariesMenuBarEntry("OC Clean Snapshot", onActivate: (context) {
-          snapshot(context, true);
+          snapshot(addonContext, context, true);
         }),
         DictionariesMenuBarEntry("Change OC Snapshot Configuration", onActivate: (context) {
           showDialog(context: context, builder: (context) {

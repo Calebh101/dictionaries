@@ -152,25 +152,27 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
               loadAddons();
               setState(() {});
             }),
-            DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsSecondDivider),
-            ...List.generate(injectedAddons.length, (i) {
-              final addon = injectedAddons[i];
+            if (injectedAddons.isNotEmpty) ...[
+              DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsSecondDivider),
+              ...List.generate(injectedAddons.length, (i) {
+                final addon = injectedAddons[i];
 
-              return DictionariesMenuBarEntry("Disengage ${addon.id}", onActivate: (context) {
-                disengageAddons(addon.id);
-                setState(() {});
-              });
-            }),
-            DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsThirdDivider),
-            ...List.generate(injectedAddons.length, (i) {
-              final addon = injectedAddons[i];
+                return DictionariesMenuBarEntry("Disengage ${addon.id}", onActivate: (context) {
+                  disengageAddons(addon.id);
+                  setState(() {});
+                });
+              }),
+              DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsThirdDivider),
+              ...List.generate(injectedAddons.length, (i) {
+                final addon = injectedAddons[i];
 
-              return DictionariesMenuBarEntry("Disengage and Reinject ${addon.id}", onActivate: (context) {
-                disengageAddons(addon.id);
-                loadAddons(addon.id);
-                setState(() {});
-              });
-            }),
+                return DictionariesMenuBarEntry("Disengage and Reinject ${addon.id}", onActivate: (context) {
+                  disengageAddons(addon.id);
+                  loadAddons(addon.id);
+                  setState(() {});
+                });
+              }),
+            ],
           ],
         ]),
       ].inject(injectedMenuEntries.map((x) => x.$1).toList())),

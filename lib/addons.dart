@@ -125,15 +125,15 @@ class DictionariesMenuBarPosition {
 }
 
 class AddonLogger {
-  static void print(Object? input, {List<Object?>? attachments}) {
-    Logger.print("Addon: $input", attachments: attachments);
+  static void print(AddonContext context, Object? input, {List<Object?>? attachments}) {
+    Logger.print("${context.id}: $input", attachments: attachments);
   }
 
-  static void warn(Object? input, {List<Object?>? attachments}) {
+  static void warn(AddonContext context, Object? input, {List<Object?>? attachments}) {
     Logger.warn("Addon: $input", attachments: attachments);
   }
 
-  static void error(Object? input, {List<Object?>? attachments}) {
+  static void error(AddonContext context, Object? input, {List<Object?>? attachments}) {
     Logger.error("Addon: $input", attachments: attachments);
   }
 }
