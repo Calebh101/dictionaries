@@ -21,8 +21,32 @@ final Version binaryVersion = Version.parse("1.0.0A");
 
 Uri? sourceUri;
 List<DictionariesAddon> injectedAddons = [];
-List<DictionariesUIInjection> injectedAddonUIs = [];
-List<DictionariesMenuBarInjection> injectedMenuEntries = [];
+List<(DictionariesUIInjection, AddonContext)> injectedAddonUIs = [];
+List<(DictionariesMenuBarInjection, AddonContext)> injectedMenuEntries = [];
+
+bool isLoaded(String id) {
+  return injectedAddons.any((x) => x.id == id);
+}
+
+void disengageAddons([String? id]) {
+  Logger.print("Disengaging addons for ID ${id ?? "all"}...");
+
+  for (var a in injectedAddons) {
+    if (id == null || a.id == id) {
+      a.onDisengage();
+    }
+  }
+
+  if (id == null) {
+    injectedAddons.clear();
+    injectedAddonUIs.clear();
+    injectedMenuEntries.clear();
+  } else {
+    injectedAddons.removeWhere((x) => x.id == id);
+    injectedAddonUIs.removeWhere((x) => x.$2.id == id);
+    injectedMenuEntries.removeWhere((x) => x.$2.id == id);
+  }
+}
 
 Future<void> main() async {
   if (kDebugMode) Logger.enable();
@@ -47,7 +71,7 @@ class MainApp extends StatelessWidget {
       title: "Dictionaries",
     );
 
-    for (var ui in injectedAddonUIs.whereType<DictionariesMaterialAppInjection>()) {
+    for (var ui in injectedAddonUIs.map((x) => x.$1).whereType<DictionariesMaterialAppInjection>()) {
       app = ui.build(context, app);
     }
 

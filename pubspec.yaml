@@ -46,9 +46,10 @@ dependencies:
   path: ^1.9.1
 
   # Addon-related dependencies
-
-  make_root_say_banana:
-    path: addons/make_root_say_banana
+  banana:
+    path: addons/banana
+  dictionaries_oc_snapshot:
+    path: addons/dictionaries_oc_snapshot
 
 dev_dependencies:
   flutter_test:

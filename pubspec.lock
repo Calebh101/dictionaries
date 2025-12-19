@@ -41,6 +41,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.0"
+  banana:
+    dependency: "direct main"
+    description:
+      path: "addons/banana"
+      relative: true
+    source: path
+    version: "0.0.1"
   boolean_selector:
     dependency: transitive
     description:
@@ -81,6 +88,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+  convert:
+    dependency: transitive
+    description:
+      name: convert
+      sha256: b30acd5944035672bc15c6b7a8b47d773e41e2f17de064350988c5d02adb1c68
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.2"
   cross_file:
     dependency: transitive
     description:
@@ -93,10 +108,10 @@ packages:
     dependency: transitive
     description:
       name: crypto
-      sha256: "1e445881f28f22d6140f181e07737b22f1e099a5e1ff94b0af2f9e4a463f4855"
+      sha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf
       url: "https://pub.dev"
     source: hosted
-    version: "3.0.6"
+    version: "3.0.7"
   csslib:
     dependency: transitive
     description:
@@ -121,6 +136,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.2.4"
+  dictionaries_oc_snapshot:
+    dependency: "direct main"
+    description:
+      path: "addons/dictionaries_oc_snapshot"
+      relative: true
+    source: path
+    version: "0.0.1"
   dio:
     dependency: transitive
     description:
@@ -165,10 +187,10 @@ packages:
     dependency: "direct main"
     description:
       name: file_picker
-      sha256: f2d9f173c2c14635cc0e9b14c143c49ef30b4934e8d1d274d6206fcb0086a06f
+      sha256: d974b6ba2606371ac71dd94254beefb6fa81185bde0b59bdc1df09885da85fde
       url: "https://pub.dev"
     source: hosted
-    version: "10.3.3"
+    version: "10.3.8"
   file_saver:
     dependency: "direct main"
     description:
@@ -378,13 +400,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.6"
-  make_root_say_banana:
-    dependency: "direct main"
-    description:
-      path: "addons/make_root_say_banana"
-      relative: true
-    source: path
-    version: "0.0.1"
   matcher:
     dependency: transitive
     description:
@@ -433,6 +448,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  oc_snapshot:
+    dependency: transitive
+    description:
+      name: oc_snapshot
+      sha256: "2b13107590fb7229641e2c967f850d9cad8570baddf22f520a341b4017e0e6b8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.1"
   packages_extensions:
     dependency: transitive
     description:
@@ -517,10 +540,10 @@ packages:
     dependency: "direct main"
     description:
       name: plist_parser
-      sha256: "513ebec02049c4ef99571ceb66abf2c16c115256c1aff7b0125db77839a392b7"
+      sha256: "52b6ded32b9560405a1c2590f0b285e3e2e2c751fa9ffdf2b7d15db9102335f2"
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.5"
+    version: "0.2.6"
   plugin_platform_interface:
     dependency: transitive
     description:
@@ -545,6 +568,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.3"
+  propertylistserialization:
+    dependency: transitive
+    description:
+      name: propertylistserialization
+      sha256: "645aaac37e73735286087fc81b27c7eabaa81b6146881bdf84090ba56f4e15ad"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.4.1"
   provider:
     dependency: transitive
     description:

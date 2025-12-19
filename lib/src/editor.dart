@@ -5,8 +5,11 @@ import 'package:collection/collection.dart';
 import 'package:dictionaries/addons.dart';
 import 'package:dictionaries/files/files.dart';
 import 'package:dictionaries/main.dart';
+import 'package:dictionaries/src/addonloader.dart';
+import 'package:dictionaries/src/menubar.dart';
 import 'package:dictionaries/src/nodeenums.dart';
 import 'package:dictionaries/src/nodes.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_context_menu/flutter_context_menu.dart' as cm;
@@ -42,6 +45,7 @@ class ObjectEditorDesktop extends StatefulWidget {
 class ObjectEditorState extends State<ObjectEditorDesktop> {
   final ChangeStack changes = ChangeStack(limit: 200);
   late final TreeController<NodeData> controller;
+  late StreamSubscription onShouldRebuildControllerSubscription;
 
   ScrollController scrollController1 = ScrollController();
   Map<String, ({TextEditingController controller, GlobalKey key})> formControllers = {};
@@ -57,8 +61,20 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
       currentExpanded = controller.toggledNodes.toList();
     });
 
+    onShouldRebuildControllerSubscription = RootNode.onShouldRebuildController.stream.listen((_) {
+      Logger.print("Rebuilding controller...");
+      controller.rebuild();
+      setState(() {});
+    });
+
     reloadExpanded();
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    onShouldRebuildControllerSubscription.cancel();
+    super.dispose();
   }
 
   void refresh({bool rebuild = false}) {
@@ -78,18 +94,17 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
   @override
   Widget build(BuildContext context) {
     return MenuBarWidget(
-      barButtons: [
-        BarButton(text: Text("File"), submenu: SubMenu(menuItems: [
-          MenuButton(text: Text("Export As..."), submenu: SubMenu(menuItems: [
-            MenuButton(text: Text("Export as Dictionary"), onTap: () async {
+      barButtons: generateBarButtonsFromEntries(context, [
+        DictionariesMenuBarEntry("File", children: [
+          DictionariesMenuBarEntry("Export As...", children: [
+            DictionariesMenuBarEntry("Export as Dictionary", onActivate: (context) async {
               bool result = await saveFile(name: currentFileName ?? "MyDictionary", bytes: RootNode.instance.toBinary(), mime: "application/c-dict", extension: "dictionary");
               if (result == false) return;
               SnackBarManager.show(context, "Saved file to $currentFileName!");
             }),
-            if (widget.source == EditorSource.online && sourceUri != null)
-            ...[
-              MenuDivider(),
-              MenuButton(text: Text("Download Original File"), onTap: () async {
+            if (widget.source == EditorSource.online && sourceUri != null) ...[
+              DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.beforeDownloadOriginalFile),
+              DictionariesMenuBarEntry("Download Original File", onActivate: (context) async {
                 try {
                   SnackBarManager.show(context, "Loading...");
                   var response = await http.get(sourceUri!);
@@ -105,25 +120,60 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
                 }
               }),
             ],
-          ])),
-          MenuDivider(),
-          MenuButton(text: Text("Return to Home"), onTap: () async {
+          ]),
+          DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.dividerAfterExport),
+          DictionariesMenuBarEntry("Return to Home", onActivate: (context) async {
             bool? result = await ConfirmationDialogue.show(context: context, title: "Are You Sure?", description: "Are you sure you want to return to the home page? All unsaved data will be lost.");
             Logger.print("Received result of $result");
             if (result == true) SimpleNavigator.navigate(context: context, page: Home(), mode: NavigatorMode.pushReplacement);
           }),
-        ])),
-        BarButton(text: Text("Edit"), submenu: SubMenu(menuItems: [
-          MenuButton(text: Text("Undo"), onTap: changes.canUndo ? () {
+        ]),
+        DictionariesMenuBarEntry("Edit", children: [
+          DictionariesMenuBarEntry("Undo", onActivate: (context) {
             changes.undo();
             refresh(rebuild: true);
-          } : null, shortcut: SingleActivator(LogicalKeyboardKey.keyZ, control: true)),
-          MenuButton(text: Text("Redo"), onTap: changes.canRedo ? () {
+          }, shortcut: SingleActivator(LogicalKeyboardKey.keyZ, control: true)),
+          DictionariesMenuBarEntry("Redo", onActivate: (context) {
             changes.redo();
             refresh(rebuild: true);
-          } : null, shortcut: SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true)),
-        ]))
-      ],
+          }, shortcut: SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true)),
+        ]),
+        DictionariesMenuBarEntry("Addons", children: [
+          DictionariesMenuBarEntry("${injectedAddons.length} Loaded"),
+          DictionariesMenuBarEntry("Manage Addons"),
+          if (kDebugMode) ...[
+            DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsTopDivider),
+            DictionariesMenuBarEntry("Disengage All", onActivate: (context) {
+              disengageAddons();
+              setState(() {});
+            }),
+            DictionariesMenuBarEntry("Disengage and Reinject All", onActivate: (context) {
+              disengageAddons();
+              loadAddons();
+              setState(() {});
+            }),
+            DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsSecondDivider),
+            ...List.generate(injectedAddons.length, (i) {
+              final addon = injectedAddons[i];
+
+              return DictionariesMenuBarEntry("Disengage ${addon.id}", onActivate: (context) {
+                disengageAddons(addon.id);
+                setState(() {});
+              });
+            }),
+            DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsThirdDivider),
+            ...List.generate(injectedAddons.length, (i) {
+              final addon = injectedAddons[i];
+
+              return DictionariesMenuBarEntry("Disengage and Reinject ${addon.id}", onActivate: (context) {
+                disengageAddons(addon.id);
+                loadAddons(addon.id);
+                setState(() {});
+              });
+            }),
+          ],
+        ]),
+      ].inject(injectedMenuEntries.map((x) => x.$1).toList())),
       child: AnimatedTreeView<NodeData>(treeController: controller, nodeBuilder: (context, entry) {
         if (entry.node.isRoot) {
           Node node = entry.node as Node;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -257,6 +258,21 @@ class RootNode extends AllNodeData {
   static const String fileMagic = "C-DICT";
   static late RootNode instance;
   static int nodes = 0;
+
+  static StreamController<void> onShouldRebuildController = StreamController.broadcast();
+
+  void reapply(Object? input, Map<DataType, String>? rawData) {
+    final newNode = RootNode.fromObject(input, rawData);
+
+    children..clear()..addAll(newNode.children);
+    _lookup..clear()..addAll(newNode._lookup);
+    _rawData..clear()..addAll(newNode._rawData);
+
+    type = newNode.type;
+    rebuild();
+    onShouldRebuildController.sink.add(null);
+    Logger.print("Reapplied, there are now ${allChildren.length} children");
+  }
 
   void rebuild() {
     _buildRootLookup();

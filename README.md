@@ -90,5 +90,5 @@ To debug your addon, open `/pubspec.yaml` and add your addon as a dependency. Th
 
 I've included several addons with Dictionaries. They reside in `/addons`.
 
-- `/addons/make_root_say_banana` does exactly that. It injects and modifies UI elements in the `DictionariesRootNodeWidget`. You can use this as a quick start reference.
+- `/addons/banana` does exactly that. It injects and modifies UI elements in the `DictionariesRootNodeWidget`. You can use this as a quick start reference.
 - `/addons/oc_snapshot` is an addon that uses my Dart port of [CorpNewt's OCSnapshot](https://github.com/corpnewt/OCSnapshot) for use with Dictionaries.

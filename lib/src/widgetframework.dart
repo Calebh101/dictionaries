@@ -12,7 +12,7 @@ abstract class DictionariesWidget {
   Widget apply<T extends DictionariesWidget>(BuildContext context, DictionariesWidgetInjectionTarget target) {
     var w = this;
 
-    for (var ui in injectedAddonUIs.whereType<DictionariesWidgetInjection>().where((x) => x.target == target)) {
+    for (var ui in injectedAddonUIs.map((x) => x.$1).whereType<DictionariesWidgetInjection>().where((x) => x.target == target)) {
       w = ui.build(context, w as T);
     }
 
