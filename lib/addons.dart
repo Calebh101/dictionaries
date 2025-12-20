@@ -91,17 +91,30 @@ enum DictionariesWidgetInjectionTarget {
   rootNode,
 }
 
-final class DictionariesWidgetInjection extends DictionariesUIInjection {
+final class DictionariesWidgetInjection<T extends DictionariesWidget> extends DictionariesUIInjection {
   final DictionariesWidgetInjectionTarget target;
-  final DictionariesWidget Function(BuildContext context, DictionariesWidget widget) build;
+  final DictionariesWidget Function(BuildContext context, T widget) _build;
 
-  const DictionariesWidgetInjection({required this.target, required this.build});
+  DictionariesWidget build(BuildContext context, DictionariesWidget widget) {
+    if (widget is T) {
+      return _build(context, widget);
+    } else {
+      Logger.warn("Detected type mismatch when building ${this.runtimeType}.");
+      return widget;
+    }
+  }
+
+  const DictionariesWidgetInjection({required this.target, required DictionariesWidget Function(BuildContext context, T widget) build}) : _build = build;
 }
 
 final class DictionariesMaterialAppInjection extends DictionariesUIInjection {
   final MaterialApp Function(BuildContext context, MaterialApp widget) build;
 
   const DictionariesMaterialAppInjection({required this.build});
+
+  void inject(AddonContext context) {
+    injectedAddonUIs.add((this, context));
+  }
 }
 
 class DictionariesMenuBarInjection {

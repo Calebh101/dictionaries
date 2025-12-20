@@ -5,6 +5,8 @@ import 'package:dictionaries/src/preview.dart';
 import 'package:dictionaries/tabview.dart';
 import 'package:flutter/material.dart';
 
+const bool showSettings = false;
+
 enum DataType {
   json,
   yaml,
@@ -69,7 +71,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
   @override
   void initState() {
     root = widget.root;
-    tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings].map((x) => UserFocusedTab<ObjectEditorTabType>(attachment: x, child: objectEditorTabTypeContent(context, x, root), thumbnail: objectEditorTabTypeToWidget(x), reorderable: false)).toList();
+    tabs = [ObjectEditorTabType.base, ObjectEditorTabType.settings].where((x) => objectEditorTabTypeToWidget(x) != null).map((x) => UserFocusedTab<ObjectEditorTabType>(attachment: x, child: objectEditorTabTypeContent(context, x, root), thumbnail: objectEditorTabTypeToWidget(x)!, reorderable: false)).toList();
     controller = UserFocusedTabViewController(tabs);
     super.initState();
   }
@@ -112,7 +114,7 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
                 }, onSelected: (value) {
                   if (value is DataType) {
                     var type = dataTypeToObjectEditorTabType(value);
-                    controller!.addTab(UserFocusedTab(child: objectEditorTabTypeContent(context, type, root), thumbnail: objectEditorTabTypeToWidget(type), attachment: type, showCloseButton: true));
+                    controller!.addTab(UserFocusedTab(child: objectEditorTabTypeContent(context, type, root), thumbnail: objectEditorTabTypeToWidget(type)!, attachment: type, showCloseButton: true));
                   }
                 }),
               ),
@@ -124,13 +126,13 @@ class _ObjectEditorPageState extends State<ObjectEditorPage> with TickerProvider
     );
   }
 
-  Widget objectEditorTabTypeToWidget(ObjectEditorTabType objectEditorTabType) {
+  Widget? objectEditorTabTypeToWidget(ObjectEditorTabType objectEditorTabType) {
     switch (objectEditorTabType) {
       case ObjectEditorTabType.base: return Icon(Icons.edit);
       case ObjectEditorTabType.json: return Text("JSON");
       case ObjectEditorTabType.yaml: return Text("YAML");
       case ObjectEditorTabType.plist: return Text("PList");
-      case ObjectEditorTabType.settings: return Icon(Icons.settings);
+      case ObjectEditorTabType.settings: return showSettings ? Icon(Icons.settings) : null;
     }
   }
 

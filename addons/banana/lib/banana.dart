@@ -25,8 +25,7 @@ class MakeRootSayBanana extends DictionariesAddon {
 
   @override
   FutureOr<void> onRegister(bool debug) {
-    DictionariesWidgetInjection(target: DictionariesWidgetInjectionTarget.rootNode, build: (context, widget) {
-      widget = widget as DictionariesRootNodeWidget;
+    DictionariesWidgetInjection<DictionariesRootNodeWidget>(target: DictionariesWidgetInjectionTarget.rootNode, build: (context, widget) {
       return widget..nameText = SelectableText("Banana!")..addWidget(DictionariesRootNodeSlot.beforeContextMenuButton, IconButton(onPressed: () {
         banana(context);
       }, icon: Text('🍌')));

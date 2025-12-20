@@ -478,6 +478,7 @@ class RootNode extends AllNodeData {
 
     XmlBuilder builder = XmlBuilder();
     builder.processing('xml', 'version="1.0" encoding="UTF-8"');
+    builder.doctype("plist", publicId: "-//Apple//DTD PLIST 1.0//EN", systemId: "http://www.apple.com/DTDs/PropertyList-1.0.dtd");
 
     builder.element('plist', nest: () {
       builder.attribute('version', '1.0');

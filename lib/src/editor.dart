@@ -363,7 +363,7 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
                   thickness: 1,
                   color: Colors.grey,
                 ),
-              ).apply(context, DictionariesWidgetInjectionTarget.rootNode);
+              ).apply<DictionariesRootNodeWidget>(context, DictionariesWidgetInjectionTarget.rootNode);
             },
           );
         }

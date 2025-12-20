@@ -66,23 +66,29 @@ class _ObjectEditorPreviewState extends State<ObjectEditorPreview> {
         ],
       ),
       body: Scrollbar(
-        controller: horizontalScrollController,
-        notificationPredicate: (notif) => notif.metrics.axis == Axis.horizontal,
+        controller: verticalScrollController,
         child: SingleChildScrollView(
-          controller: horizontalScrollController,
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: MediaQuery.of(context).size.width - 4,
-            ),
-            child: HighlightView(
-              text!,
-              language: dataTypeToLanguage(widget.type),
-              theme: isLight ? atomOneLightTheme : gruvboxDarkTheme,
-              padding: EdgeInsets.all(12),
-              textStyle: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 14,
+          controller: verticalScrollController,
+          child: Scrollbar(
+            controller: horizontalScrollController,
+            notificationPredicate: (notif) => notif.metrics.axis == Axis.horizontal,
+            child: SingleChildScrollView(
+              controller: horizontalScrollController,
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: MediaQuery.of(context).size.width - 4,
+                ),
+                child: HighlightView(
+                  text!,
+                  language: dataTypeToLanguage(widget.type),
+                  theme: isLight ? atomOneLightTheme : gruvboxDarkTheme,
+                  padding: EdgeInsets.all(12),
+                  textStyle: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ),
           ),
