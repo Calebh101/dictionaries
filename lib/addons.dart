@@ -4,12 +4,14 @@ import 'dart:async';
 
 import 'package:dictionaries/addons.dart';
 import 'package:dictionaries/main.dart';
+import 'package:dictionaries/src/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:styled_logger/styled_logger.dart';
 
 export 'package:dictionaries/src/widgetframework.dart';
 export 'package:dictionaries/src/menubar.dart' show DictionariesMenuBarEntry;
 export 'package:dictionaries/src/nodes.dart' show RootNode;
+export 'package:dictionaries/src/theme.dart' show DictionariesTheme;
 
 /// This class is what you base your entire addon around.
 /// You will make a new class that inherits this class and provides the info and permissions.
@@ -154,4 +156,10 @@ class AddonLogger {
 class AddonContext {
   final String id;
   const AddonContext.fromId(this.id);
+}
+
+extension DictionariesThemeInjection on DictionariesTheme {
+  void inject(AddonContext context, String id) {
+    addTheme("${context.id}.$id", this);
+  }
 }

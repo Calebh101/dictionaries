@@ -7,12 +7,14 @@ import 'package:dictionaries/src/addonloader.dart';
 import 'package:dictionaries/src/editor.dart';
 import 'package:dictionaries/src/main.dart';
 import 'package:dictionaries/src/nodes.dart';
+import 'package:dictionaries/src/theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:localpkg_flutter/localpkg.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:dictionaries/files/files.dart';
 
@@ -54,19 +56,27 @@ Future<void> main() async {
 
   Logger.print("Found application directory as ${(await maindir).path}");
   await loadAddons();
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  defaultThemes();
+  applyTheme(prefs.getString("theme") ?? DictionariesTheme.defaultTheme);
   runApp(const MainApp());
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   const MainApp({super.key});
 
+  @override
+  State<MainApp> createState() => MainAppState();
+}
+
+class MainAppState extends State<MainApp> {
   @override
   Widget build(BuildContext context) {
     var app = MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.light(),
-      darkTheme: ThemeData.dark(),
-      themeMode: ThemeMode.system,
+      theme: activeTheme?.$2.lightTheme ?? ThemeData.light(),
+      darkTheme: activeTheme?.$2.darkTheme ?? ThemeData.dark(),
+      themeMode: activeTheme?.$2.lightTheme != null ? (activeTheme?.$2.darkTheme != null ? ThemeMode.system : ThemeMode.light) : (activeTheme?.$2.darkTheme != null ? ThemeMode.dark : ThemeMode.system),
       home: Home(),
       title: "Dictionaries",
     );
