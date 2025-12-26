@@ -9,6 +9,7 @@ import 'package:dictionaries/src/addonloader.dart';
 import 'package:dictionaries/src/menubar.dart';
 import 'package:dictionaries/src/nodeenums.dart';
 import 'package:dictionaries/src/nodes.dart';
+import 'package:dictionaries/src/theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -139,7 +140,18 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
           }, shortcut: SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true)),
         ]),
         DictionariesMenuBarEntry("Addons", children: [
-          DictionariesMenuBarEntry("${injectedAddons.length} Loaded"),
+          DictionariesMenuBarEntry("Change Theme (${allThemes.length} themes)", children: [
+            ...List.generate(allThemes.length, (i) {
+              final id = allThemes[i].id;
+              final name = allThemes[i].theme.name;
+
+              return DictionariesMenuBarEntry([name, if (activeTheme?.id == id) "(active)"].join(" "), onActivate: (context) {
+                applyTheme(id);
+                onMainSetState?.call();
+                refresh();
+              });
+            }),
+          ]),
           DictionariesMenuBarEntry("Manage Addons"),
           if (kDebugMode) ...[
             DictionariesMenuBarEntry.divider(DictionariesMenuBarEntry.debugAddonOptionsTopDivider),

@@ -131,6 +131,15 @@ class DictionariesMenuBarInjection {
   }
 }
 
+class DictionariesMenuBarDeletion {
+  final List<String> keys;
+  const DictionariesMenuBarDeletion(this.keys);
+
+  void inject(AddonContext context) {
+    injectedMenuDeletions.add((this, context));
+  }
+}
+
 class DictionariesMenuBarPosition {
   final bool leading;
   final String? text;
@@ -160,6 +169,6 @@ class AddonContext {
 
 extension DictionariesThemeInjection on DictionariesTheme {
   void inject(AddonContext context, String id) {
-    addTheme("${context.id}.$id", this);
+    addInjectedTheme("${context.id}.$id", context.id, this);
   }
 }

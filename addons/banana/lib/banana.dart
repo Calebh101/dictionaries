@@ -37,5 +37,9 @@ class MakeRootSayBanana extends DictionariesAddon {
       }),
       DictionariesMenuBarEntry.divider("BananaDivider"),
     ], rightAfter: DictionariesMenuBarPosition.leading()).inject(context);
+
+    DictionariesTheme(
+      "Banana!",
+    ).inject(context, "banana");
   }
 }

@@ -1,4 +1,6 @@
+import 'package:collection/equality.dart';
 import 'package:dictionaries/addons.dart';
+import 'package:dictionaries/main.dart';
 import 'package:flutter/material.dart';
 import 'package:menu_bar/menu_bar.dart';
 import 'package:styled_logger/styled_logger.dart';
@@ -6,18 +8,20 @@ import 'package:menu_bar/src/entry.dart';
 
 List<BarButton> generateBarButtonsFromEntries(BuildContext context, List<DictionariesMenuBarEntry> entries) {
   return entries.map((x) {
-    return BarButton(text: Text(x.text), submenu: SubMenu(menuItems: generateMenuBarFromEntries(context, x.children)));
+    return BarButton(text: Text(x.text), submenu: SubMenu(menuItems: generateMenuBarFromEntries(context, [x.text], x.children)));
   }).whereType<BarButton>().toList();
 }
 
-List<MenuEntry> generateMenuBarFromEntries(BuildContext context, List<DictionariesMenuBarEntry> entries) {
+List<MenuEntry> generateMenuBarFromEntries(BuildContext context, List<String> keys, List<DictionariesMenuBarEntry> entries) {
   return entries.map((x) {
+    if (injectedMenuDeletions.any((y) => ListEquality().equals(y.$1.keys, [...keys, x.text]))) return null;
+
     if (x.divider) {
       return MenuDivider();
     } else if (x.onActivate != null) {
       return MenuButton(text: Text(x.text), onTap: () => x.onActivate!(context), shortcut: x.shortcut);
     } else if (x.children.isNotEmpty) {
-      return MenuButton(text: Text(x.text), submenu: SubMenu(menuItems: generateMenuBarFromEntries(context, x.children)));
+      return MenuButton(text: Text(x.text), submenu: SubMenu(menuItems: generateMenuBarFromEntries(context, [...keys, x.text], x.children)));
     } else {
       return MenuButton(text: Text(x.text));
     }
@@ -51,7 +55,7 @@ void injectAllMenuBarEntries(List<DictionariesMenuBarEntry> current, List<Dictio
 
         if (e.onActivate != null) {
           // The thing we're trying to traverse into has an onActivate,
-          // so we'll warn and ignore
+          // so we'll warn and ignore.
           Logger.warn("Menu bar injection tries to traverse into $key, but $key can't be traversed into! Full path: ${injection.keys.join("/")}");
           invalid = true;
           break;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,9 +23,12 @@ final Version version = Version.parse("0.0.0A");
 final Version binaryVersion = Version.parse("1.0.0A");
 
 Uri? sourceUri;
+void Function()? onMainSetState;
+
 List<DictionariesAddon> injectedAddons = [];
 List<(DictionariesUIInjection, AddonContext)> injectedAddonUIs = [];
 List<(DictionariesMenuBarInjection, AddonContext)> injectedMenuEntries = [];
+List<(DictionariesMenuBarDeletion, AddonContext)> injectedMenuDeletions = [];
 
 bool isLoaded(String id) {
   return injectedAddons.any((x) => x.id == id);
@@ -43,11 +47,23 @@ void disengageAddons([String? id]) {
     injectedAddons.clear();
     injectedAddonUIs.clear();
     injectedMenuEntries.clear();
+    injectedMenuDeletions.clear();
+    injectedThemes.clear();
+
+    applyTheme();
   } else {
     injectedAddons.removeWhere((x) => x.id == id);
     injectedAddonUIs.removeWhere((x) => x.$2.id == id);
     injectedMenuEntries.removeWhere((x) => x.$2.id == id);
+    injectedMenuDeletions.removeWhere((x) => x.$2.id == id);
+    injectedThemes.removeWhere((x) => x.id == id);
+
+    if (activeTheme?.id == id) {
+      applyTheme();
+    }
   }
+
+  onMainSetState?.call();
 }
 
 Future<void> main() async {
@@ -57,8 +73,8 @@ Future<void> main() async {
   Logger.print("Found application directory as ${(await maindir).path}");
   await loadAddons();
   SharedPreferences prefs = await SharedPreferences.getInstance();
-  defaultThemes();
-  applyTheme(prefs.getString("theme") ?? DictionariesTheme.defaultTheme);
+  getDefaultThemes();
+  applyTheme(prefs.getString("theme"));
   runApp(const MainApp());
 }
 
@@ -71,12 +87,18 @@ class MainApp extends StatefulWidget {
 
 class MainAppState extends State<MainApp> {
   @override
+  void initState() {
+    onMainSetState = () => setState(() {});
+    super.initState();
+  }
+
+  @override
   Widget build(BuildContext context) {
     var app = MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: activeTheme?.$2.lightTheme ?? ThemeData.light(),
-      darkTheme: activeTheme?.$2.darkTheme ?? ThemeData.dark(),
-      themeMode: activeTheme?.$2.lightTheme != null ? (activeTheme?.$2.darkTheme != null ? ThemeMode.system : ThemeMode.light) : (activeTheme?.$2.darkTheme != null ? ThemeMode.dark : ThemeMode.system),
+      theme: activeTheme?.theme.lightTheme ?? ThemeData.light(),
+      darkTheme: activeTheme?.theme.darkTheme ?? ThemeData.dark(),
+      themeMode: activeTheme?.theme.lightTheme != null ? (activeTheme?.theme.darkTheme != null ? ThemeMode.system : ThemeMode.light) : (activeTheme?.theme.darkTheme != null ? ThemeMode.dark : ThemeMode.system),
       home: Home(),
       title: "Dictionaries",
     );
