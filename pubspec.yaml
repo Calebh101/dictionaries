@@ -50,6 +50,7 @@ dependencies:
     path: addons/banana
   dictionaries_oc_snapshot:
     path: addons/dictionaries_oc_snapshot
+  quick_listener: ^0.0.1
 
 dev_dependencies:
   flutter_test:

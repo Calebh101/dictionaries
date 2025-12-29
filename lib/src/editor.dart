@@ -18,6 +18,7 @@ import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:localpkg_flutter/localpkg.dart';
 import 'package:menu_bar/menu_bar.dart';
+import 'package:quick_listener/quick_listener.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:undo/undo.dart';
 
@@ -145,9 +146,9 @@ class ObjectEditorState extends State<ObjectEditorDesktop> {
               final id = allThemes[i].id;
               final name = allThemes[i].theme.name;
 
-              return DictionariesMenuBarEntry([name, if (activeTheme?.id == id) "(active)"].join(" "), onActivate: (context) {
+              return DictionariesMenuBarEntry([name, if (activeTheme?.id == id) "(active)"].join(" "), onActivate: (context) async {
                 applyTheme(id);
-                onMainSetState?.call();
+                await QuickListener("mainSetState").broadcastAndWait();
                 refresh();
               });
             }),

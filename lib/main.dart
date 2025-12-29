@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:localpkg_flutter/localpkg.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:quick_listener/quick_listener.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:styled_logger/styled_logger.dart';
 import 'package:dictionaries/files/files.dart';
@@ -23,7 +24,6 @@ final Version version = Version.parse("0.0.0A");
 final Version binaryVersion = Version.parse("1.0.0A");
 
 Uri? sourceUri;
-void Function()? onMainSetState;
 
 List<DictionariesAddon> injectedAddons = [];
 List<(DictionariesUIInjection, AddonContext)> injectedAddonUIs = [];
@@ -63,7 +63,7 @@ void disengageAddons([String? id]) {
     }
   }
 
-  onMainSetState?.call();
+  QuickListener("mainSetState").broadcast();
 }
 
 Future<void> main() async {
@@ -88,7 +88,7 @@ class MainApp extends StatefulWidget {
 class MainAppState extends State<MainApp> {
   @override
   void initState() {
-    onMainSetState = () => setState(() {});
+    QuickListener("mainSetState").listen((data, respond) => setState(() {}));
     super.initState();
   }
 

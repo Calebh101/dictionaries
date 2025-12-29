@@ -40,6 +40,11 @@ class MakeRootSayBanana extends DictionariesAddon {
 
     DictionariesTheme(
       "Banana!",
+      codeTheme: DictionariesTheme.defaultCodeTheme,
+      darkTheme: null,
+      lightTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.yellow),
+      ),
     ).inject(context, "banana");
   }
 }
