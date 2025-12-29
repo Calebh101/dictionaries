@@ -43,7 +43,33 @@ class MakeRootSayBanana extends DictionariesAddon {
       codeTheme: DictionariesTheme.defaultCodeTheme,
       darkTheme: null,
       lightTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.yellow),
+        brightness: Brightness.light,
+
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.yellow,
+          primary: Colors.yellow.shade700,
+          secondary: Colors.yellow.shade600,
+          tertiary: Colors.amber,
+          surface: Colors.yellow.shade50,
+        ),
+        scaffoldBackgroundColor: Colors.yellow.shade100,
+        cardTheme: CardThemeData(
+          color: Colors.yellow.shade50,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.yellow.shade700,
+            foregroundColor: Colors.black,
+          ),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: Colors.yellow.shade600,
+          foregroundColor: Colors.black,
+        ),
+        iconTheme: IconThemeData(
+          color: Colors.yellow.shade800,
+        ),
+        dividerColor: Colors.yellow.shade300,
       ),
     ).inject(context, "banana");
   }
